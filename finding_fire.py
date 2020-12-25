@@ -364,7 +364,7 @@ def add_weekly(df,add_indicators=False,plot=True,other_indicator_function=None):
     week_low = df.groupby('week_year').agg('min')['low']
     week_close=df.groupby('week_year').agg('last').sort_values('date')['close']
     week_open =df.groupby('week_year').agg('first').sort_values('date')['open']
-    week_date =df.groupby('week_year').agg('last')['date']
+    week_date =df.groupby('week_year').agg('last').sort_values('date')['date']
     week_volume=df.groupby('week_year').agg('sum')['volume']
 
     week_columns= [week_high,week_low,week_close,week_open,week_volume,week_date]
@@ -391,8 +391,9 @@ def add_weekly(df,add_indicators=False,plot=True,other_indicator_function=None):
             df[new_col][i] = week_df[col][week_year]
 
     if plot == True:
-        sola(df[['low','high','week_low','week_high']])
-        sola(df[['week_open','week_close','open','close']])
+        #sola(df[['low','high','week_low','week_high']])
+        #sola(df[['week_open','week_close','open','close']])
+        jenay(df,line_one='week_open',line_two='week_close',title='Weekly Lines')
 
 
         
@@ -406,7 +407,7 @@ def sola(df,title=None):
 
 
 
-def higher_highs_trendmap(df,plot=True,only_return_trend=False):
+def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=False):
     '''
     NEEDS TO BE TESTED!!! 
     TODO:
@@ -489,8 +490,10 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):
         df['last_high_and_last_low_higher_scale'] = df['last_high_and_last_low_higher'].replace(True,1).replace(1,df.close)
         df[['close','last_high_and_last_low_higher_scale']].iplot(theme='solar',fill=True)
     if only_return_trend == True:
-        loosers = ['riz','up_corn','dn_corn','last_up_corn','last_dn_corn','higher_low','higher_high','lower_high','lower_low','closee','last_high_and_last_low_higher','last_low_was_higher','datee']
+        loosers = ['riz','up_corn','dn_corn','last_up_corn','last_dn_corn','higher_low','higher_high','lower_high','lower_low','closee','last_low_was_higher','datee']
         df = df.drop(loosers,axis=1)
+    
+    return df
 
         
 def short_frame(df,plot=False):
@@ -509,3 +512,152 @@ def short_frame(df,plot=False):
     df[['high','low']] = df[['low','high']]
     if plot == True:
         sola(df[['low','high']])
+
+
+import plotly.graph_objects as go
+
+def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',scale_two=''):
+
+    '''
+    ploting and scaling all in one
+    TAKES:
+        1.df
+        2.fast and slow ma
+        3.line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
+        4.scale_one - takes bool and make true close for visual guid on signals
+
+
+
+    scale_one and scale_two
+    
+    '''
+
+    # name the avgs
+    fname = 'ma_'+str(fast)
+    sname = 'ma_'+str(slow)
+
+    #create avgs
+    df[fname] = df['close'].rolling(fast).mean().shift()
+    df[sname] = df['close'].rolling(slow).mean().shift()
+    # True if fast is above
+    df['fast_above'] = df[fname]>df[sname]
+
+
+    if len(line_one) == 0:
+        line_one = '50Day_MA'
+        df[line_one] = df['close'].rolling(50).mean().shift()
+    if len(line_two) == 0:
+        line_two = '200Day_MA'
+        df[line_two] = df['close'].rolling(200).mean().shift()
+
+    #and finally plot the shindig
+    fig = go.Figure(data=[go.Candlestick(x=df.index,#x=df['date'],
+                    open=df['open'],
+                    high=df['high'],
+                    low=df['low'],
+                    close=df['close'],
+                    increasing_line_color= 'cyan',
+                    decreasing_line_color= 'gray'   
+                                        ),
+                         go.Scatter(x=df.index, y=df[line_one],name=line_one ,line=dict(color='lightgreen', width=3)),
+                         go.Scatter(x=df.index, y=df[line_two],name=line_two ,line=dict(color='red', width=3)),
+                         #go.Scatter(x=df.index, y=df[fname] ,  name=fname,  line=dict(color='purple', width=3)),
+                         #go.Scatter(x=df.index, y=df[sname],   name=sname, line=dict(color='yellow', width=3))
+
+                         ])
+    
+#FILL TRACE
+
+    fig.add_trace(go.Scatter(x=df.index, y=df[line_one],
+        mode='lines',
+        name='BUY',
+        opacity=0.09,
+        fill='tonexty',
+        line=dict(color='lightgreen')))
+    
+    if len(scale_one) > 0: 
+        scale_name = scale_one + '_scale'
+        df[scale_name] = df[scale_one].replace(True,1).replace(1,df.close)
+        fig.add_trace(go.Scatter(x=df.index, y=df[scale_name],
+            mode='lines',
+            name=scale_one,
+            opacity=0.02,
+            fill='tozeroy',
+            line=dict(color='green')))
+
+    
+    if len(scale_two) > 0: 
+        scale_name_two = scale_two + '_scale'
+        df[scale_name_two] = df[scale_two].replace(True,1).replace(1,df.close)
+        fig.add_trace(go.Scatter(x=df.index, y=df[scale_name_two],
+            mode='lines',
+            name=scale_two,
+            opacity=0.02,
+            fill='tozeroy',
+            line=dict(color='orange')))
+
+
+
+
+
+    layout = go.Layout(
+        xaxis = dict(
+            rangeslider = dict(
+                visible = False
+            )
+        )
+    )
+    fig.update_layout(layout,template='plotly_dark',title=title)#template="plotly_dark",title='Candle')
+    fig.show(theme='solar',yaxis = dict(fixedrange = False))
+
+
+
+
+       #buy strace
+
+    '''fig.add_trace(go.Scatter(x=df.index, y=df['val'],
+                            mode='lines',name='Validation',
+                             line=dict(color='lightskyblue',
+                                      )
+                            ))
+    #                    mode='markers',
+    #                    name='markers'))
+'''
+'''
+    SO THESE ARE NEAT AND TIDY 
+
+
+    fig.add_trace(go.Scatter(x=df.index, y=df['buyscale'],
+                        mode='markers',
+                        name='BUY',
+                            marker=dict(
+                            color='seagreen',
+                            size=8
+                            )
+                            ))
+
+
+
+
+    fig.add_trace(go.Scatter(x=df.index, y=df['sellscale'],
+                        mode='markers',
+                        name='SELL',
+                                     marker=dict(
+                                     color='#d62728',
+                                     size=8,)
+
+
+                            ))
+
+
+#FILL TRACE
+
+    fig.add_trace(go.Scatter(x=df.index, y=df['tracscale'],
+
+    mode='lines',
+    name='BUY',
+    opacity=0.09,
+    fill='tozeroy',
+                            line=dict(color='lightgreen')))
+
+''' 
