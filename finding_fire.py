@@ -54,6 +54,10 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
     # then get add together later with a weight values...
 
 
+    ''' IF YOU GET TIERD:
+        of this function erroring out just put this into the whole thing, however i would prefer
+        for the backtest to stop before this stage if there are no buy signals'''
+    #if len(df[df['buy']==True]) > 0
 
     ENTRY_PNT = 'close'
     if len(limit) > 0:
@@ -96,7 +100,7 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
         df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
 
 
-        #df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True)
+        df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
 
     #grab the first buy to scale price
     first_buy = df[df[BUY]==True].close.iloc[0]
@@ -121,8 +125,9 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
         else:
             scale[i] = scale[i-1]
     #plot_capital = True
-    if plot == True:
-        df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True)
+    if plot_capital == True:
+        df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
+        
         
         
         
@@ -178,10 +183,16 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
     
     li.append(d)
     result = pd.DataFrame(li)
+    
+    if plot_capital == True:
+        result[['wins','loss']].sum().plot(kind='pie')
+
+
+
     return result
 
 
-def pct_targets(df,up_pct=10,dn_pct=5,plot=True):
+def pct_targets(df,up_pct=10,dn_pct=5,plot=False):
     '''
     TAKES:
         1.df
@@ -199,7 +210,7 @@ def pct_targets(df,up_pct=10,dn_pct=5,plot=True):
     df['dn_targ'] = df['close'] - (df['close']*dn_pct)
     if plot == True:
         df[['dn_targ','close','up_targ']].iplot(theme='solar',fill=True)
-
+    
 
 
 def the_twelve(df,return_candlelist=False):
@@ -302,3 +313,199 @@ def candle_pct(df,candle,up_pct=10,dn_pct=5,plot=False,stoch=False,stoch_thresh=
 
 
 #candle_pct(df,'DOJI',15,5,plot=True,stoch=True,stoch_thresh=20,return_list=True)
+
+
+def indicator_adder(df):
+    '''
+    this adds the most common indicators to a dataframe
+    with lower case close open high low volume
+    takes: dataframe
+    returns : dataframe
+    '''
+    df['rsi'] = pta.rsi(df.close)
+    df['riz'] = pta.rsi(df.close,length=2)
+    df['vwap'] = pta.vwap(df.high,df.low,df.close,df.volume)
+    df[['stoch_k','stoch_d']] = pta.stoch(df.high,df.low,df.close)
+    if len(df)>20:
+        df['ema'] = pta.ema(df.close,length=20)
+    df['rsi'] = pta.rsi(df.close,length=2)
+    #if len(df)>6:
+        #df        = super_trend(df)
+    return df
+
+
+
+def add_weekly(df,add_indicators=False,plot=True,other_indicator_function=None):
+    '''
+    -mixes weekly data with a smaller time frame dataframe
+
+    Takes:
+        1.df -  a daily or intra day datafame,
+        2. add_indicators : bool adds [rsi , vwap, stochastic and ema ] to weekly dataframe
+        3. plot? - bool
+        4. other_indicator_function - function 
+            ADD: a indicator function of your choosing!@@@@@@!! yeet yeet skeet skeet. wooh!
+    RETURNS:
+        df, - new and improved with weekly stuff
+
+    '''
+    df['week'] = df.index.week
+    df['date'] = df.index.date
+    df
+    df['year'] = df.index.year
+    df.head()
+
+    df['week_year'] = df['year'].astype(str)+ '-'+ df['week'].astype(str)
+    df
+
+    df.groupby('week_year').agg('last')#.sort_values('date')
+
+    week_high= df.groupby('week_year').agg('max')['high']
+    week_low = df.groupby('week_year').agg('min')['low']
+    week_close=df.groupby('week_year').agg('last').sort_values('date')['close']
+    week_open =df.groupby('week_year').agg('first').sort_values('date')['open']
+    week_date =df.groupby('week_year').agg('last')['date']
+    week_volume=df.groupby('week_year').agg('sum')['volume']
+
+    week_columns= [week_high,week_low,week_close,week_open,week_volume,week_date]
+    week_df = pd.DataFrame(week_columns).T
+    week_df = week_df.sort_values('date')
+    if add_indicators == True:
+        week_df  = indicator_adder(week_df)
+    week_df
+
+    if other_indicator_function != None:
+        other_indicator_function(week_df)
+
+    from tqdm import trange
+
+
+
+    for col in week_df.drop('date',axis=1).columns:
+        week_df[col] = week_df[col].shift()
+        new_col = 'week_'+col
+        print(new_col)
+        df[new_col] = 0.0
+        for i in trange(1,len(df)):
+            week_year = df['week_year'][i]
+            df[new_col][i] = week_df[col][week_year]
+
+    if plot == True:
+        sola(df[['low','high','week_low','week_high']])
+        sola(df[['week_open','week_close','open','close']])
+
+
+        
+
+
+import pandas_ta as pta
+def sola(df,title=None):
+    return df.iplot(theme='solar',fill=True,title=title)
+
+
+
+
+
+def higher_highs_trendmap(df,plot=True,only_return_trend=False):
+    '''
+    NEEDS TO BE TESTED!!! 
+    TODO:
+        1. VERIFY WITH tradingview
+        2. a bunch of these loops if not all can go inside each other...
+        
+    tracks higher highs and higher lows, when you have one after the other 
+       the column:
+           trend_change_up == True
+    '''
+    
+    df['riz'] = pta.rsi(df.close,legnth=2)
+    df['up_corn'] = (df['riz']>df['riz'].shift()) & ( df['riz'].shift()<df['riz'].shift(2))
+    df['dn_corn'] = (df['riz']<df['riz'].shift()) & ( df['riz'].shift()>df['riz'].shift(2))
+    df['last_up_corn'] = 0.0
+    df['last_dn_corn'] = 0.0
+    df['higher_low']   = False
+    df['higher_high']  = False
+    df['lower_high']   = False
+    df['lower_low']    = False
+
+    for i in trange(1,len(df)):
+        if df['up_corn'][i] == True:
+            df['last_up_corn'][i] = df['close'][i]
+        else:
+            df['last_up_corn'][i] = df['last_up_corn'][i-1]
+        if df['dn_corn'][i] == True:
+            df['last_dn_corn'][i] = df['close'][i]
+        else:
+            df['last_dn_corn'][i] = df['last_dn_corn'][i-1]
+
+        if (df['up_corn'][i] == True) & (df['last_up_corn'][i] > df['last_up_corn'][i-1]):
+            df['higher_low'][i] = True
+        if (df['dn_corn'][i] == True) & (df['last_dn_corn'][i] > df['last_dn_corn'][i-1]):
+            df['higher_high'][i] = True
+
+        if (df['up_corn'][i]==True) & (df['higher_low'][i]==False):
+            df['lower_low'][i] = True
+        if (df['dn_corn'][i] == True) & (df['higher_high'][i] == False):
+            df['lower_high'][i] = True
+
+    df['last_high_was_higher'] = False
+    for i in trange(len(df)):
+        if df['higher_high'][i] == True:
+            df['last_high_was_higher'][i] = True
+        elif df['lower_high'][i] == True:
+            df['last_high_was_higher'][i] = False
+        else:
+            df['last_high_was_higher'][i] = df['last_high_was_higher'][i-1]
+
+    df['last_high_was_lower'] = ( df['last_high_was_higher'] == False)     
+
+    
+
+    df['last_low_was_higher'] = False
+    for i in trange(len(df)):
+        if df['higher_low'][i] == True:
+            df['last_low_was_higher'][i] = True
+        elif df['higher_low'][i] == True:
+            df['last_low_was_higher'][i] = False
+        else:
+            df['last_low_was_higher'][i] = df['last_low_was_higher'][i-1]
+
+    df['last_low_was_lower'] = False
+    for i in trange(len(df)):
+        if df['lower_low'][i] == True:
+            df['last_low_was_lower'][i] = True
+        elif df['higher_low'][i] == True:
+            df['last_low_was_lower'][i] = False
+        else:
+            df['last_low_was_lower'][i] = df['last_low_was_lower'][i-1]#.......................................................
+
+    df['closee'] = df['close']  
+    df['last_high_and_last_low_higher'] = (df['last_high_was_higher']==True) & (df['last_low_was_higher']==True)
+    df['last_low_was_higher'] = df['last_low_was_lower'] == False        
+    df['trend_change']   = df['last_high_and_last_low_higher'] != df['last_high_and_last_low_higher'].shift()#...........................
+    df['trend_change_up'] = (df['trend_change']==True) & ( df['last_high_and_last_low_higher']==True)
+    #df['datee']           = df.index.date
+    if plot == True:
+        df['last_high_and_last_low_higher_scale'] = df['last_high_and_last_low_higher'].replace(True,1).replace(1,df.close)
+        df[['close','last_high_and_last_low_higher_scale']].iplot(theme='solar',fill=True)
+    if only_return_trend == True:
+        loosers = ['riz','up_corn','dn_corn','last_up_corn','last_dn_corn','higher_low','higher_high','lower_high','lower_low','closee','last_high_and_last_low_higher','last_low_was_higher','datee']
+        df = df.drop(loosers,axis=1)
+
+        
+def short_frame(df,plot=False):
+    if plot == True:
+        sola(df[['low','high']])
+
+    #INVERT DATA
+    big_num = df['high'].max()
+    print(big_num)
+
+    price_columns = ['open','low','high','close']
+    for col in price_columns:
+        df[col] = big_num - df[col]
+
+    # swap high and low since we inverted
+    df[['high','low']] = df[['low','high']]
+    if plot == True:
+        sola(df[['low','high']])
