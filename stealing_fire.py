@@ -135,6 +135,7 @@ def hl(df):
 
 def load_data(path):
     df = pd.read_csv(path)
+    [df.rename(columns={col:col.lower()},inplace = True) for col in df.columns]
     if 'time' in df.columns:
         df = df.set_index('time')
         df.index = pd.to_datetime(df.index,unit='s')
@@ -142,7 +143,10 @@ def load_data(path):
         df = df.set_index('date')
         df.index = pd.to_datetime(df.index)
     df
-    df = df[['open','close','low','high']]
+    col_list = ['open','close','low','high']
+    if 'volume' in df.columns:
+        col_list.append('volume')
+    df = df[col_list]
     return df
 
 

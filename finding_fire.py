@@ -59,6 +59,8 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
         for the backtest to stop before this stage if there are no buy signals'''
     #if len(df[df['buy']==True]) > 0
 
+    
+
     ENTRY_PNT = 'close'
     if len(limit) > 0:
         ENTRY_PNT = limit
@@ -89,14 +91,14 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
             dn[i] = dn[i-1]
             trac[i] = trac[i-1]
             ent[i]  = ent[i-1]
-
+    df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
     #need a candelstick PLT SUCKA!!!
     if plot == True:
         df['trac_scale'] = df['trac'].replace(True,1).replace(1,df.close) 
         df['TARG_scale'] = df['TARG'].replace(True,1).replace(1,df.close)
         df['STOP_scale'] = df['STOP'].replace(True,1).replace(1,df.close)
         df['OUT_scale']  = df['OUT'].replace(True,1).replace(1,df.close)
-        df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
+        
         df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
 
 
@@ -292,13 +294,15 @@ def candle_buy(df,candle='',stoch=True,stoch_thresh=30,plot=True,return_list=Fal
         
         
         
-def candle_pct(df,candle,up_pct=10,dn_pct=5,plot=False,stoch=False,stoch_thresh=30,return_list=False):
+def candle_pct(df,candle,up_pct=10,dn_pct=5,plot=False,stoch=False,stoch_thresh=30,return_list=False,condition=None):
     
     strat_name = candle + '_stoch:'+str(stoch_thresh)+'uppct:'+str(up_pct)+'dnpct'+str(dn_pct)
     print(strat_name)
 
 
     candle_buy(df,candle,stoch=stoch,stoch_thresh=stoch_thresh,plot=False,return_list=return_list)#,condition=condition)
+    if condition != None:
+        df['buy'] = (df['buy'] == True) & (df[condition].shift()==True)
     if len(df[df['buy']==True]) > 0:
         pct_targets(df,up_pct,dn_pct,plot)
         result =one_stop(df,strat_name=strat_name,plot=plot,plot_capital=plot)
@@ -404,7 +408,7 @@ def sola(df,title=None):
     return df.iplot(theme='solar',fill=True,title=title)
 
 
-
+THIS_NEEDS_TO_BE_RENAMMED =''
 
 
 def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=False):
@@ -420,6 +424,7 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
     '''
     
     df['riz'] = pta.rsi(df.close,legnth=2)
+
     df['up_corn'] = (df['riz']>df['riz'].shift()) & ( df['riz'].shift()<df['riz'].shift(2))
     df['dn_corn'] = (df['riz']<df['riz'].shift()) & ( df['riz'].shift()>df['riz'].shift(2))
     df['last_up_corn'] = 0.0
@@ -502,7 +507,8 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
         
 def short_frame(df,plot=False):
     if plot == True:
-        sola(df[['low','high']])
+        jenay(df)
+        #sola(df[['low','high']])
 
     #INVERT DATA
     big_num = df['high'].max()
@@ -515,7 +521,11 @@ def short_frame(df,plot=False):
     # swap high and low since we inverted
     df[['high','low']] = df[['low','high']]
     if plot == True:
-        sola(df[['low','high']])
+        jenay(df)
+        #sola(df[['low','high']])
+    df
+    return df
+    
 
 
 import plotly.graph_objects as go
@@ -679,7 +689,7 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
 import numpy as np
 
 
-def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capital=True,strat_name='strat_name_here',limit=''):
+def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_capital=True,strat_name='strat_name_here',limit=''):
     '''
     basically - a version of one_stop with a moving stop loss...
         TODO- 
@@ -750,6 +760,7 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capi
     if len(limit) > 0:
         ENTRY_PNT = limit
 
+    '''i dont know why this line breaks it... maybe it cant be true so .shift'''
     df[BUY] = (df[BUY]==True) & ( df['close']>df[DN_TARG])
 
     for i in range(1,len(df)):
@@ -782,24 +793,7 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capi
             trac[i] = trac[i-1]
             ent[i]  = ent[i-1]
 
-    #need a candelstick PLT SUCKA!!!
-    if plot == True:
-        df['trac_scale'] = df['trac'].replace(True,1).replace(1,df.close) 
-        df['TARG_scale'] = df['TARG'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
-        df['STOP_scale'] = df['STOP'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
-        df['OUT_scale']  = df['OUT'].replace(True,1).replace(1,df.close)
-        df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
-        df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
-
-        #[df['TARG_scale'][]]
-
-        line_one='TARG_scale'
-        line_two='STOP_scale'
-        scale_one='SCALE_ACNT'
-        jenay(df,line_one=line_one,line_two=line_two,scale_one=scale_one)
-
-        #df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
-
+    
     #grab the first buy to scale price
     first_buy = df[df[BUY]==True].close.iloc[0]
     df['SCALE_ACNT'] = first_buy
@@ -824,13 +818,9 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capi
             scale[i] = scale[i-1]
     #plot_capital = True
     if plot_capital == True:
+        df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
         df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
-        
-        
-        
-        
-    
-    
+
     
     df['win_cnt'] = df['PNL_PCT']>0
     df['los_cnt'] = df['PNL_PCT']<0
@@ -881,10 +871,170 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capi
     
     li.append(d)
     result = pd.DataFrame(li)
-    
+ 
+#need a candelstick PLT SUCKA!!!
+    if plot == True:
+        df['trac_scale'] = df['trac'].replace(True,1).replace(1,df.close) 
+        df['TARG_scale'] = df['TARG'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
+        df['STOP_scale'] = df['STOP'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
+        df['OUT_scale']  = df['OUT'].replace(True,1).replace(1,df.close)
+        df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
+        df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
+
+        #[df['TARG_scale'][]]
+
+        line_one='TARG_scale'
+        line_two='STOP_scale'
+        scale_one='SCALE_ACNT'
+        jenay(df,line_one=line_one,line_two=line_two,scale_one=scale_one,title=strat_name)
+
+        #df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
+   
     if plot == True:
         result[['wins','loss']].sum().plot(kind='pie')
 
 
 
     return result
+
+
+from datetime import datetime
+def riz_delta(df,DN_THRESH=7,UP_THRESH=95,buy_col=True,riz_to_high_level=60,riz_len= 2,limit_lookback=False,time_delta=52,plot=True,return_df=True):
+    '''
+    RETURNS:
+        1.riz - results_dataFrame
+        2. original df - if return_df==true
+    
+    Makes Riz Targets
+        COLUMNS:
+            1.rix_up - first up corner coming out of extream levels
+            2.rix_dn - first dn corner coming out of extream levels
+    TODO:        
+            3.riz_buy
+    '''
+    li = []
+
+    #Function
+    if limit_lookback==True:
+        last_year = datetime.now() - pd.Timedelta(weeks=time_delta)
+        print('lastyear',last_year)
+        df = df[df.index > last_year]
+
+    from stealing_fire import sola,hl
+    import pandas_ta as pta
+
+
+    df['riz'] = pta.rsi(df.close,length=riz_len)
+    d = {}
+    DN_THRESH = 7
+    UP_THRESH = 95
+
+    #saving results for  documenting thee research
+    #d['sheet']     = sheet
+    d['DN_THRESH'] = DN_THRESH
+    d['UP_THRESH'] = UP_THRESH
+
+    print('DN_THRESH:',DN_THRESH)
+    print('UP_THRESH:',UP_THRESH)
+
+
+
+    df['low_ex'] = df['riz'] < DN_THRESH
+    df['high_ex']= df['riz'] > UP_THRESH
+
+    hl(df)
+
+    # How Often do Riz Corners Signal a Push?
+
+    hl(df)
+    df['rix_up'] = (df['low_ex']==False) & (df['low_ex'].shift()==True)
+    df['rix_dn'] = (df['high_ex']==False) & (df['high_ex'].shift()==True)
+    hl(df)
+
+    df['rix_bionary'] = False
+
+    rib = df['rix_bionary']
+    rix = df['rix_up']
+    rixd= df['rix_dn']
+
+    for i in range(1,len(df)):
+        if rix[i] == True:
+            rib[i] = True
+        elif rixd[i] == True:
+            rib[i] = False
+        else:
+            rib[i] = rib[i-1]
+
+    hl(df)
+
+    df['swix'] = rib != rib.shift()
+
+    rixdf = df[df['swix'] == True]
+
+    rixdf['low_to_high_ex_diff'] = rixdf['close'] - rixdf['close'].shift()
+
+    rixdf['positive_delta']      = rixdf['low_to_high_ex_diff'] > rixdf['low_to_high_ex_diff'].shift()
+    rixdf['negitive_delta']      = rixdf['low_to_high_ex_diff'] < rixdf['low_to_high_ex_diff'].shift()
+
+    
+    hl(rixdf.groupby('rix_up').agg('mean'))
+
+    dflen = len(rixdf)/2
+    if plot == True:
+        jenay(df,scale_two='high_ex',scale_one='low_ex')
+        rixdf.groupby('rix_up').agg('mean')['low_to_high_ex_diff'].iplot(theme='solar',kind='bar')    
+        rixdf.groupby('rix_up').agg('sum')[['positive_delta','negitive_delta']].iloc[0].plot(kind='pie')
+
+    rdf = rixdf.groupby('rix_up').agg('sum')[['positive_delta','negitive_delta']]
+
+    po = rdf['positive_delta'].iloc[0]
+    ne = rdf['negitive_delta'].iloc[0]
+
+    delta_percent = str(round(po/(po+ne)*100)) + ' %'
+    print('delta_percent',delta_percent)
+    d['delta_percent']        = delta_percent
+    rdf['rix_delta_accuracy'] = delta_percent
+
+    start_date = df.index[0]
+    end_date   = df.index[-1]
+    print('start_date',start_date)
+    print('end_date',end_date)
+    d['start_date'] = start_date
+    d['end_date']   = end_date
+    d['TOTALTIME'] = end_date - start_date
+    d['positive_delta'] = po
+    d['negitive_delta'] = ne
+
+    if buy_col == True:
+        df['buy'] =  (df['rix_up']==True) & (df['riz'] < riz_to_high_level)
+
+
+    li.append(d)
+    rrdf = pd.DataFrame(li)
+    
+    ouput = rrdf
+    if return_df == True:
+        output = [rrdf,df]
+    return output
+
+
+
+
+
+
+'''
+TREND MAP 
+will be a funtion that add what ever trend criteria you 
+want to test.
+    EXAMPLE:    
+        if you want a [dialy / weekly] :
+            [hh_hl / riz ] 
+
+'''
+from sklearn.preprocessing import StandardScaler
+def scale(df):
+    scale = StandardScaler()
+    scaled=scale.fit_transform(df)
+    sdf   = pd.DataFrame(scaled,columns=df.columns)
+    sdf.index = df.index
+    return sdf
