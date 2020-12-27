@@ -489,6 +489,10 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
     if plot == True:
         df['last_high_and_last_low_higher_scale'] = df['last_high_and_last_low_higher'].replace(True,1).replace(1,df.close)
         df[['close','last_high_and_last_low_higher_scale']].iplot(theme='solar',fill=True)
+        jenay(df,scale_one='last_high_and_last_low_higher',line_one='last_up_corn')
+
+
+
     if only_return_trend == True:
         loosers = ['riz','up_corn','dn_corn','last_up_corn','last_dn_corn','higher_low','higher_high','lower_high','lower_low','closee','last_low_was_higher','datee']
         df = df.drop(loosers,axis=1)
@@ -525,9 +529,7 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
         2.fast and slow ma
         3.line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
         4.scale_one - takes bool and make true close for visual guid on signals
-    TODO:
-        1. add line list so you can plot several lines at the same tinme
-            a. this will been some kind of color iteration function. 
+
 
 
     scale_one and scale_two
@@ -572,7 +574,7 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
 
     fig.add_trace(go.Scatter(x=df.index, y=df[line_one],
         mode='lines',
-        name='BUY',
+        name=line_one,
         opacity=0.09,
         fill='tonexty',
         line=dict(color='lightgreen')))
@@ -599,6 +601,14 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
             line=dict(color='orange')))
 
 
+    fig.add_trace(go.Scatter(x=df.index, y=df[fname],
+                        mode='lines',
+                        name=fname,
+                            marker=dict(
+                            color='orange',
+                            size=9
+                            )
+                            ))
 
 
 
@@ -612,6 +622,7 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
     fig.update_layout(layout,template='plotly_dark',title=title)#template="plotly_dark",title='Candle')
     fig.show(theme='solar',yaxis = dict(fixedrange = False))
 
+    
 
 
 
@@ -663,3 +674,217 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
                             line=dict(color='lightgreen')))
 
 ''' 
+
+
+import numpy as np
+
+
+def vally_stop(df,UP_TARG='up_targ',DN_TARG='5_ma',BUY='buy',plot=True,plot_capital=True,strat_name='strat_name_here',limit=''):
+    '''
+    basically - a version of one_stop with a moving stop loss...
+        TODO- 
+            >confirm buy with close > con_line
+            >eliminate 'dn' updating' every row iteration
+
+            > INSERT CANDLE PLOT!!!
+                - replace 0 with np.nan
+
+            >built in trailing pct stop
+
+    one stop backtest shop... creates targets compiles the strat, plots the action and TODO: 1.return backtest results 2.name_strat
+    TAKES:
+        1.dataframe
+        2.UP_TARG - where to set target when buy_trigger is hit, for profit EXAMPLE: pct , atr, bollinger_bands,
+        3.DN_TARG - where to set stop when buy_trigger is hit, for loss
+        4.plot    - plots the trades
+        5.plot_cap- plots the scaled acnt
+        6.limit   - this is where the entry level will be taken from 
+            HOWEVER:
+                YOU MUST build ARENESS that price went below your limit
+                PRICE INTO THE BUY SIGNAL!
+    RETURNS:
+         results dataframe
+        and plots
+    LIMIT
+
+    '''
+    # create default validation column if its not been created 
+    if DN_TARG == '5_ma':
+        df[DN_TARG] = df['close'].rolling(5).mean()
+
+    #FUNCTION
+    df['buyy'] = df[BUY]
+    df['trac'] = False
+    df['STOP'] = 0.0
+    df['TARG'] = 0.0
+    df['OUT']  = False
+    df['ENTRY']= 0.00
+    df['EXIT'] = 0.00
+    trac = df['trac']
+    up   = df['TARG']
+    dn   = df['STOP']
+    out  = df['OUT']
+    ent  = df['ENTRY']
+    exit = df['EXIT']
+
+    #the only difference with validation entry is this first row 
+    #will have an eextra layer for waiting...
+
+    ## then adding tranches will just go under each up and dn... 
+    ## they will be independant acnts operating in the same frame work...
+    # then get add together later with a weight values...
+    
+    #blue print for trailing stop statmnet
+    #df['dn_moved_up'] = df[DN_TARG].shift() > df[DN_TARG].shift(2)
+    #?? IF trailing == True: # pretty sure i can just add this to the thing
+    #        if df['dn_moved_up'][i] == True:
+    #        #if df[DN_TARG][i-1] > df[DN_TARG][i-2]:
+    #            dn[i] = df[DN_TARG][i-1]
+
+    ''' IF YOU GET TIERD:
+        of this function erroring out just put this into the whole thing, however i would prefer
+        for the backtest to stop before this stage if there are no buy signals'''
+    #if len(df[df['buy']==True]) > 0
+
+    ENTRY_PNT = 'close'
+    if len(limit) > 0:
+        ENTRY_PNT = limit
+
+    df[BUY] = (df[BUY]==True) & ( df['close']>df[DN_TARG])
+
+    for i in range(1,len(df)):
+        if (trac[i-1]==False) & (df[BUY][i]==True):
+            trac[i] = True
+            up[i] = df[UP_TARG][i]
+            dn[i] = df[DN_TARG][i]
+            ent[i]= df[ENTRY_PNT][i]
+        if (trac[i-1] == True)  & (df['low'][i]<dn[i-1]):
+            out[i] = True
+            trac[i] = False
+            if (df['open'][i]<dn[i-1]):
+                exit[i] = df['open'][i]
+            else:
+                exit[i] = dn[i-1]
+        if (trac[i-1] == True) & (df['high'][i]> up[i-1]):
+            out[i] = True
+            trac[i] = False
+            if (df['open'][i]> up[i-1]):
+                exit[i] = df['open'][i]
+            else:
+                exit[i] = up[i-1]
+        if (out[i-1] == False) & (trac[i-1]==True):
+            up[i] = up[i-1]
+            
+            #i need dn to update based on which is bigger ( dn)
+
+            dn_update = max(df[DN_TARG][i-1],dn[i-1])
+            dn[i] = dn_update
+            trac[i] = trac[i-1]
+            ent[i]  = ent[i-1]
+
+    #need a candelstick PLT SUCKA!!!
+    if plot == True:
+        df['trac_scale'] = df['trac'].replace(True,1).replace(1,df.close) 
+        df['TARG_scale'] = df['TARG'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
+        df['STOP_scale'] = df['STOP'].replace(True,1).replace(1,df.close)#.replace(0,np.nan)
+        df['OUT_scale']  = df['OUT'].replace(True,1).replace(1,df.close)
+        df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
+        df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
+
+        #[df['TARG_scale'][]]
+
+        line_one='TARG_scale'
+        line_two='STOP_scale'
+        scale_one='SCALE_ACNT'
+        jenay(df,line_one=line_one,line_two=line_two,scale_one=scale_one)
+
+        #df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
+
+    #grab the first buy to scale price
+    first_buy = df[df[BUY]==True].close.iloc[0]
+    df['SCALE_ACNT'] = first_buy
+
+    #placeholders
+    scale = df['SCALE_ACNT']
+    df['TRAC'] = df['trac']
+    df['PNL']  = 0.00
+    df["PNL_PCT"] = 0.00
+
+    hl(df)
+    #thi should have been built into atr_targs
+    #IM GOING TO ADD NON PYRIMIDING ACNT VALUE TO THIS AS WELL!!!
+
+    #simulation results
+    for i in trange(1,len(df)):
+        if (df['TRAC'][i] == False) & (df['TRAC'][i-1]==True):
+            df['PNL'][i] = exit[i-1] - df['ENTRY'][i-1]
+            df['PNL_PCT'][i] = df['PNL'][i]/df['ENTRY'][i-1]
+            scale[i] = (scale[i-1]*df['PNL_PCT'][i])+scale[i-1]
+        else:
+            scale[i] = scale[i-1]
+    #plot_capital = True
+    if plot_capital == True:
+        df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
+        
+        
+        
+        
+    
+    
+    
+    df['win_cnt'] = df['PNL_PCT']>0
+    df['los_cnt'] = df['PNL_PCT']<0
+    
+        
+    win_cnt = df['win_cnt'].sum()
+    los_cnt = df['los_cnt'].sum()
+    total   = win_cnt+los_cnt
+    win_pct = (win_cnt/total)
+    
+    #FIGURE OUT PNL AND WHICH ONE TO USE
+    #final_pnl= (df['acnt'][-1]-1000)/1000*100
+    
+    # accumulitive PNL
+    acc_pnl   = ((df['SCALE_ACNT'].iloc[-1] - first_buy)/first_buy*100)
+    final_pnl = str(round(acc_pnl))# +str('%')
+    acc        = True
+
+    #non accumulitive PNL
+    non_acc_pnl = df['PNL_PCT'].sum()
+
+    #which one is better?
+    if (acc_pnl < non_acc_pnl):
+        acc = False
+    #non accumulitive pnl
+    non_acc_final_pnl = str(round(non_acc_pnl))
+
+    print('STRAT_NAME   :',strat_name)
+    print('final_acnt value:',df['SCALE_ACNT'].iloc[-1])
+    print('total_+trades:',total)
+    print('wins        :',win_cnt)
+    print('loss        :',los_cnt)
+    print('win_percent :',(win_pct))
+    print('final_pnl   :',final_pnl,'%')
+
+    d = {}
+    li =[]
+    
+    d['strat_name']        = strat_name
+    d['final_acnt value']  = df['SCALE_ACNT'].iloc[-1]
+    d['total_trades']      = total
+    d['wins']              = win_cnt
+    d['loss']              = los_cnt
+    d['win_percent']       = win_pct*100
+    d['final_pnl']         = final_pnl
+    d['accumulitive_pnl']  = acc
+    d['non_acc_final_pnl'] = non_acc_final_pnl
+    
+    li.append(d)
+    result = pd.DataFrame(li)
+    
+    if plot == True:
+        result[['wins','loss']].sum().plot(kind='pie')
+
+
+
+    return result
