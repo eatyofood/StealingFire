@@ -525,7 +525,9 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
         2.fast and slow ma
         3.line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
         4.scale_one - takes bool and make true close for visual guid on signals
-
+    TODO:
+        1. add line list so you can plot several lines at the same tinme
+            a. this will been some kind of color iteration function. 
 
 
     scale_one and scale_two
