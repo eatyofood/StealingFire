@@ -133,7 +133,7 @@ def hl(df):
     return df
 
 
-def load_data(path):
+def load_data(path,all_columns=False):
     df = pd.read_csv(path)
     [df.rename(columns={col:col.lower()},inplace = True) for col in df.columns]
     if 'time' in df.columns:
@@ -146,7 +146,10 @@ def load_data(path):
     col_list = ['open','close','low','high']
     if 'volume' in df.columns:
         col_list.append('volume')
-    df = df[col_list]
+    
+    #only condence if true
+    if all_columns==False:
+        df = df[col_list]
     return df
 
 

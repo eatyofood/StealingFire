@@ -1038,3 +1038,46 @@ def scale(df):
     sdf   = pd.DataFrame(scaled,columns=df.columns)
     sdf.index = df.index
     return sdf
+
+
+def bipolar(df,first,last,col):
+    '''
+    a quick way to have a bionary read on the world
+    
+    
+    returns a columns: 
+        that stays true till 'last' becomes true
+    '''
+    df[col] = False
+    for i in range(1,len(df)):
+        if df[first][i] == True:
+            df[col][i] = True
+            
+        elif df[last][i] == True:
+            df[col][i] = False
+        else:
+            df[col][i] = df[col][i-1]
+
+
+def count_this(df,thing,reset,col_name):
+    '''
+    creates a new col that keeps a rolling count of 'thing' until 'reset'
+    ITS BIASED to the COUNT!! 
+       if the counting thing is true it wont go through the other if statments
+    
+    TAKES:
+        1.df
+        2.thing- column of bools
+        3.reset - column of bool
+        4. columns name - str: the name of your new counting columns
+    '''
+    
+    df[col_name] = 0
+    for i in range(1,len(df)):
+        if df[thing][i] == True:
+            df[col_name][i] = 1 + df[col_name][i-1]
+        elif df[reset][i] == True:
+            df[col_name][i] = 0
+        else:
+            df[col_name][i] = df[col_name][i-1]
+    return df
