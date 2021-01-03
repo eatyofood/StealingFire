@@ -11,7 +11,7 @@ def hl(df):
     return df
 
 
-def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_capital=True,strat_name='strat_name_here',limit=''):
+def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_capital=False,strat_name='strat_name_here',limit=''):
     '''
     one stop backtest shop... creates targets compiles the strat, plots the action and TODO: 1.return backtest results 2.name_strat
     TAKES:
@@ -129,8 +129,18 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
     #plot_capital = True
     if plot_capital == True:
         df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
-        
-        
+
+
+
+    ### RESULTS MODS = [
+    df['acnt'] = 1000
+    for i in trange(1,len(df)):
+        if df['PNL_PCT'][i] != 0:
+            # adjust acnt value based on pct changes
+            df['acnt'][i] = df['acnt'][i-1]+(df['PNL_PCT'][i]*df['acnt'][i-1])
+        else:
+            df['acnt'][i] = df['acnt'][i-1]
+            
         
         
     
@@ -144,26 +154,16 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
     los_cnt = df['los_cnt'].sum()
     total   = win_cnt+los_cnt
     win_pct = (win_cnt/total)
-    
-    #FIGURE OUT PNL AND WHICH ONE TO USE
-    #final_pnl= (df['acnt'][-1]-1000)/1000*100
-    
-    # accumulitive PNL
-    acc_pnl   = ((df['SCALE_ACNT'].iloc[-1] - first_buy)/first_buy*100)
-    final_pnl = str(round(acc_pnl))# +str('%')
-    acc        = True
+  
+    ### RESULTS MODS     
+    win_cnt = df['win_cnt'].sum()
+    los_cnt = df['los_cnt'].sum()
+    total   = win_cnt+los_cnt
+    win_pct = (win_cnt/total)
+    final_pnl= (df['acnt'][-1]-1000)/1000*100
 
-    #non accumulitive PNL
-    non_acc_pnl = df['PNL_PCT'].sum()
 
-    #which one is better?
-    if (acc_pnl < non_acc_pnl):
-        acc = False
-    #non accumulitive pnl
-    non_acc_final_pnl = str(round(non_acc_pnl))
-
-    print('STRAT_NAME   :',strat_name)
-    print('final_acnt value:',df['SCALE_ACNT'].iloc[-1])
+    print('final_acnt value:',df['acnt'][-1])
     print('total_+trades:',total)
     print('wins        :',win_cnt)
     print('loss        :',los_cnt)
@@ -174,18 +174,18 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_cap
     li =[]
     
     d['strat_name']        = strat_name
-    d['final_acnt value']  = df['SCALE_ACNT'].iloc[-1]
+    d['final_acnt_value']  = df['acnt'][-1]
     d['total_trades']      = total
     d['wins']              = win_cnt
     d['loss']              = los_cnt
-    d['win_percent']       = win_pct*100
+    d['win_pct']           = win_pct*100
     d['final_pnl']         = final_pnl
-    d['accumulitive_pnl']  = acc
-    d['non_acc_final_pnl'] = non_acc_final_pnl
-    
+
     li.append(d)
+
     result = pd.DataFrame(li)
-    
+
+    ### RESULTS MODS END
     if plot_capital == True:
         result[['wins','loss']].sum().plot(kind='pie')
 
@@ -332,7 +332,7 @@ def indicator_adder(df):
     df[['stoch_k','stoch_d']] = pta.stoch(df.high,df.low,df.close)
     if len(df)>20:
         df['ema'] = pta.ema(df.close,length=20)
-    df['rsi'] = pta.rsi(df.close,length=2)
+    
     #if len(df)>6:
         #df        = super_trend(df)
     return df
@@ -390,7 +390,7 @@ def add_weekly(df,add_indicators=False,plot=True,other_indicator_function=None):
         new_col = 'week_'+col
         print(new_col)
         df[new_col] = 0.0
-        for i in trange(1,len(df)):
+        for i in range(1,len(df)):
             week_year = df['week_year'][i]
             df[new_col][i] = week_df[col][week_year]
 
@@ -421,6 +421,9 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
     tracks higher highs and higher lows, when you have one after the other 
        the column:
            trend_change_up == True
+
+    RETURNS COLUMNS:
+        'last_hl_uptrend' - when last high and last low were both higher
     '''
     
     df['riz'] = pta.rsi(df.close,legnth=2)
@@ -486,15 +489,15 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
             df['last_low_was_lower'][i] = df['last_low_was_lower'][i-1]#.......................................................
 
     df['closee'] = df['close']  
-    df['last_high_and_last_low_higher'] = (df['last_high_was_higher']==True) & (df['last_low_was_higher']==True)
+    df['last_hl_uptrend'] = (df['last_high_was_higher']==True) & (df['last_low_was_higher']==True)
     df['last_low_was_higher'] = df['last_low_was_lower'] == False        
-    df['trend_change']   = df['last_high_and_last_low_higher'] != df['last_high_and_last_low_higher'].shift()#...........................
-    df['trend_change_up'] = (df['trend_change']==True) & ( df['last_high_and_last_low_higher']==True)
+    df['trend_change']   = df['last_hl_uptrend'] != df['last_hl_uptrend'].shift()#...........................
+    df['trend_change_up'] = (df['trend_change']==True) & ( df['last_hl_uptrend']==True)
     #df['datee']           = df.index.date
     if plot == True:
-        df['last_high_and_last_low_higher_scale'] = df['last_high_and_last_low_higher'].replace(True,1).replace(1,df.close)
-        df[['close','last_high_and_last_low_higher_scale']].iplot(theme='solar',fill=True)
-        jenay(df,scale_one='last_high_and_last_low_higher',line_one='last_up_corn')
+        df['last_hl_uptrend_scale'] = df['last_hl_uptrend'].replace(True,1).replace(1,df.close)
+        df[['close','last_hl_uptrend_scale']].iplot(theme='solar',fill=True)
+        jenay(df,scale_one='last_hl_uptrend',line_one='last_up_corn')
 
 
 
@@ -689,7 +692,7 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
 import numpy as np
 
 
-def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_capital=True,strat_name='strat_name_here',limit=''):
+def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_capital=False,strat_name='strat_name_here',limit=''):
     '''
     basically - a version of one_stop with a moving stop loss...
         TODO- 
@@ -822,34 +825,42 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_c
         df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
 
     
+    #df['win_cnt'] = df['PNL_PCT']>0
+    #df['los_cnt'] = df['PNL_PCT']<0  
+    #win_cnt = df['win_cnt'].sum()
+    #los_cnt = df['los_cnt'].sum()
+    #total   = win_cnt+los_cnt
+    #win_pct = (win_cnt/total)
+    
+
+    ### RESULTS MODS = [
+    df['acnt'] = 1000
+    for i in trange(1,len(df)):
+        if df['PNL_PCT'][i] != 0:
+            # adjust acnt value based on pct changes
+            df['acnt'][i] = df['acnt'][i-1]+(df['PNL_PCT'][i]*df['acnt'][i-1])
+        else:
+            df['acnt'][i] = df['acnt'][i-1]
+            
+        
+        
+    
     df['win_cnt'] = df['PNL_PCT']>0
     df['los_cnt'] = df['PNL_PCT']<0
-    
-        
     win_cnt = df['win_cnt'].sum()
     los_cnt = df['los_cnt'].sum()
     total   = win_cnt+los_cnt
     win_pct = (win_cnt/total)
-    
-    #FIGURE OUT PNL AND WHICH ONE TO USE
-    #final_pnl= (df['acnt'][-1]-1000)/1000*100
-    
-    # accumulitive PNL
-    acc_pnl   = ((df['SCALE_ACNT'].iloc[-1] - first_buy)/first_buy*100)
-    final_pnl = str(round(acc_pnl))# +str('%')
-    acc        = True
+  
+    ### RESULTS MODS     
+    win_cnt = df['win_cnt'].sum()
+    los_cnt = df['los_cnt'].sum()
+    total   = win_cnt+los_cnt
+    win_pct = (win_cnt/total)
+    final_pnl= (df['acnt'][-1]-1000)/1000*100
 
-    #non accumulitive PNL
-    non_acc_pnl = df['PNL_PCT'].sum()
 
-    #which one is better?
-    if (acc_pnl < non_acc_pnl):
-        acc = False
-    #non accumulitive pnl
-    non_acc_final_pnl = str(round(non_acc_pnl))
-
-    print('STRAT_NAME   :',strat_name)
-    print('final_acnt value:',df['SCALE_ACNT'].iloc[-1])
+    print('final_acnt value:',df['acnt'][-1])
     print('total_+trades:',total)
     print('wins        :',win_cnt)
     print('loss        :',los_cnt)
@@ -860,17 +871,18 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=True,plot_c
     li =[]
     
     d['strat_name']        = strat_name
-    d['final_acnt value']  = df['SCALE_ACNT'].iloc[-1]
+    d['final_acnt_value']  = df['acnt'][-1]
     d['total_trades']      = total
     d['wins']              = win_cnt
     d['loss']              = los_cnt
-    d['win_percent']       = win_pct*100
+    d['win_pct']           = win_pct*100
     d['final_pnl']         = final_pnl
-    d['accumulitive_pnl']  = acc
-    d['non_acc_final_pnl'] = non_acc_final_pnl
-    
+
     li.append(d)
+
     result = pd.DataFrame(li)
+
+    ### RESULTS MODS END
  
 #need a candelstick PLT SUCKA!!!
     if plot == True:
@@ -1040,25 +1052,6 @@ def scale(df):
     return sdf
 
 
-def bipolar(df,first,last,col):
-    '''
-    a quick way to have a bionary read on the world
-    
-    
-    returns a columns: 
-        that stays true till 'last' becomes true
-    '''
-    df[col] = False
-    for i in range(1,len(df)):
-        if df[first][i] == True:
-            df[col][i] = True
-            
-        elif df[last][i] == True:
-            df[col][i] = False
-        else:
-            df[col][i] = df[col][i-1]
-
-
 def count_this(df,thing,reset,col_name):
     '''
     creates a new col that keeps a rolling count of 'thing' until 'reset'
@@ -1081,3 +1074,78 @@ def count_this(df,thing,reset,col_name):
         else:
             df[col_name][i] = df[col_name][i-1]
     return df
+
+
+
+
+def bipolar(df,first,last,col):
+    '''
+    a quick way to have a bionary read on the world
+    
+    df[col] is true if first is true and remians true until last is true
+    
+    - good for wiating on multiple conditions
+    
+    returns a columns: 
+        that stays true till 'last' becomes true
+    '''
+    df[col] = False
+    for i in range(1,len(df)):
+        if df[first][i] == True:
+            df[col][i] = True
+            
+        elif df[last][i] == True:
+            df[col][i] = False
+        else:
+            df[col][i] = df[col][i-1]
+
+
+
+def vtrend(df,trend_thresh=8,plot=True ):
+    '''
+    TREND MAP - vma trend
+    '''
+
+    df['vma_green'] = df['vma'] > df['vma'].shift()
+    df['vma_red'] = df['vma'] < df['vma'].shift()
+    #hl(df)
+    if plot == True:
+        jenay(df,scale_one='vma_green',scale_two='vma_red')
+        # counting the green moves
+    df['green_cnt'] = 0
+    df['red_cnt']   = 0
+    for i in range(1,len(df)):
+        if df['vma_green'][i] == True:
+            df['green_cnt'][i] = 1 + df['green_cnt'][i-1]
+            
+        if df['vma_green'][i] == False:
+            df['green_cnt'][i] = 0
+
+        if df['vma_red'][i] == True:
+            df['red_cnt'][i] = 1 + df['red_cnt'][i-1]
+
+        if df['vma_red'][i] == False:
+            df['red_cnt'][i] = 0
+
+    # how many up bars on the vma before you condiser it up...
+    df['up_trend'] = df['green_cnt'] > trend_thresh
+    df['dn_trend'] = df['red_cnt'] > trend_thresh
+
+    #creating a bionary columns of the last trend direction 
+    bipolar(df,'up_trend','dn_trend','vma_uptrend')
+    #the oposite of that column
+    df['vma_dntrend'] = df['vma_uptrend'] == False
+
+    if plot == True:
+        # plotting the plot trend direction
+        jenay(df,line_one='plot.3',line_two='vma',scale_one='vma_uptrend',scale_two='vma_dntrend')
+
+
+
+def trendmap(df,vma=True,vtrend_thresh=8):
+    if vma==True:
+        if 'vma' in df.columns:
+            vtrend(df,trend_thresh=vtrend_thresh)
+        else:
+            print('VMA is not in the dataframe')
+    
