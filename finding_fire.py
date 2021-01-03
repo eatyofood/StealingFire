@@ -117,7 +117,10 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
     hl(df)
     #thi should have been built into atr_targs
     #IM GOING TO ADD NON PYRIMIDING ACNT VALUE TO THIS AS WELL!!!
-
+    
+    # afirm that the last col is flat positions
+    df['TRAC'][-1] = False
+    exit[-2] = df.close[-2]
     #simulation results
     for i in trange(1,len(df)):
         if (df['TRAC'][i] == False) & (df['TRAC'][i-1]==True):
@@ -811,6 +814,9 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_
     #thi should have been built into atr_targs
     #IM GOING TO ADD NON PYRIMIDING ACNT VALUE TO THIS AS WELL!!!
 
+    # afirm that the last col is flat positions
+    df['TRAC'][-1] = False
+    exit[-2] = df.close[-2]
     #simulation results
     for i in trange(1,len(df)):
         if (df['TRAC'][i] == False) & (df['TRAC'][i-1]==True):
