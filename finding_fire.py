@@ -165,13 +165,13 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
     win_pct = (win_cnt/total)
     final_pnl= (df['acnt'][-1]-1000)/1000*100
 
-
+    print('strat_name      :',strat_name)
     print('final_acnt value:',df['acnt'][-1])
-    print('total_+trades:',total)
-    print('wins        :',win_cnt)
-    print('loss        :',los_cnt)
-    print('win_percent :',(win_pct))
-    print('final_pnl   :',final_pnl,'%')
+    print('total_+trades   :',total)
+    print('wins            :',win_cnt)
+    print('loss            :',los_cnt)
+    print('win_percent     :',(win_pct))
+    print('final_pnl       :',final_pnl,'%')
 
     d = {}
     li =[]
@@ -865,13 +865,13 @@ def vally_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_
     win_pct = (win_cnt/total)
     final_pnl= (df['acnt'][-1]-1000)/1000*100
 
-
+    print('strat_name      :',strat_name)
     print('final_acnt value:',df['acnt'][-1])
-    print('total_+trades:',total)
-    print('wins        :',win_cnt)
-    print('loss        :',los_cnt)
-    print('win_percent :',(win_pct))
-    print('final_pnl   :',final_pnl,'%')
+    print('total_+trades   :',total)
+    print('wins            :',win_cnt)
+    print('loss            :',los_cnt)
+    print('win_percent     :',(win_pct))
+    print('final_pnl       :',final_pnl,'%')
 
     d = {}
     li =[]
