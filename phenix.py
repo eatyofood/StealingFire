@@ -53,3 +53,46 @@ results.append(result)
 
 
 
+
+
+
+'''
+Short Line Candel Algo --- 
+'''
+
+pct_targets(df,up_pct=UP_PCT,dn_pct=DN_PCT)
+df['SHORTLINE'] = talib.CDLSHORTLINE(df.open,df.high,df.low,df.close).replace(100,True)
+
+#buy when the candle triggers and the mention thresh is met
+df['buy_sig'] = (df['SHORTLINE']==True) & (df['mention_thresh_met']==True)
+
+#count how many buy signals you have
+count_this(df,'buy_sig','close','buy_cnt')
+
+
+# if the buy signal is below the thresh its in play
+df['buy']     = (df['buy_sig']==True) & (df['buy_cnt'].shift()<BUY_LIMIT)
+
+#jenay(df,scale_one='buy')
+
+
+# dont even run the backtest if theres no signals
+
+if len(df[df['buy']==True])>0:
+    strat_name = 'Candel_'+'Mention:'+str(MENTION_THRESH)+'-one_stop'+'_UP:'+str(UP_PCT) + '_DN:' + str(DN_PCT) + '_buy_limit:' + str(BUY_LIMIT)
+    result = one_stop(df,plot=plot,strat_name=strat_name)
+    result['ticker'] = col
+    result['buy_cap']= BUY_LIMIT
+    results.append(result)
+
+
+
+    strat_name ='Candel_'+ 'Mention:'+str(MENTION_THRESH)+'-vally_stop'+'_UP:'+str(UP_PCT) + '_DN:' + str(DN_PCT) + '_buy_limit:' + str(BUY_LIMIT)
+    result = vally_stop(df,plot=plot,strat_name=strat_name)
+    result['ticker'] = col
+    result['buy_cap']= BUY_LIMIT
+    results.append(result)
+
+                #
+
+

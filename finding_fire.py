@@ -218,7 +218,7 @@ def pct_targets(df,up_pct=10,dn_pct=5,plot=False):
         df[['dn_targ','close','up_targ']].iplot(theme='solar',fill=True)
     
 
-
+import talib
 def the_twelve(df,return_candlelist=False):
     '''
     adds candles to the data frame
@@ -513,6 +513,17 @@ def higher_highs_trendmap(df,plot=True,only_return_trend=False):#,return_frame=F
 
         
 def short_frame(df,plot=False):
+    '''
+    this function is supposed to create a perfectly inverted dataframe of a stock data dataframe .
+    to simplify the development of short strategys and/or sell signals as well as high probability downtrends. 
+
+    strategys with positive alpha work in both directions...
+    
+
+    TAKES:
+        1. dataframe - and subtracts the whole thing by the highest number in the 'high' column.
+                    then adds the lowest number from min to set it back to scale... 
+    '''
     if plot == True:
         jenay(df)
         #sola(df[['low','high']])
@@ -521,9 +532,15 @@ def short_frame(df,plot=False):
     big_num = df['high'].max()
     print(big_num)
 
+    small_num = df['low'].min()
+    print(small_num)
+
     price_columns = ['open','low','high','close']
     for col in price_columns:
-        df[col] = big_num - df[col]
+        df[col] = (big_num - df[col]) + small_num
+
+
+    
 
     # swap high and low since we inverted
     df[['high','low']] = df[['low','high']]
@@ -1158,6 +1175,15 @@ def trendmap(df,vma=True,vtrend_thresh=8):
     
 
 def save_function(results,STUDY):
+    '''
+    concatonates a list of backtest results from a loop and appends or creates the aggrigated results csv
+    or creates it (nd the directory ag_output/) if it doesnt exitst.
+        does the same to the study sheet. 
+
+    TAKES:
+        1.results list -  ( of backtest dataframes from loops)
+        2. STUDY - STR: the name of your particular study
+    '''
     try: 
         '''
         -SAVE  RESULTS ZONE-|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
@@ -1209,3 +1235,10 @@ def save_function(results,STUDY):
     except BaseException as b:
         print('no save cuz:')
         print(b)
+
+
+def sobar(df,title='TITLE HERE'):
+    '''
+    bar plot
+    '''
+    df.iplot(theme='solar',kind='bar',title=title)
