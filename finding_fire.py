@@ -2,6 +2,7 @@ import pandas as pd
 from tqdm import trange
 import talib
 import pandas_ta as pta
+import os
       
 def hl(df):
     def highlight(boo):
@@ -1155,3 +1156,56 @@ def trendmap(df,vma=True,vtrend_thresh=8):
         else:
             print('VMA is not in the dataframe')
     
+
+def save_function(results,STUDY):
+    try: 
+        '''
+        -SAVE  RESULTS ZONE-|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+        '''
+        rdf = pd.concat(results)
+        rdf['study'] = STUDY
+
+        # LAST ADDITIONS TO THE DATASET
+        print('made it!')
+        #rdf['backtest_time'   ] = str(datetime.now())
+        #rdf['backtest_runtime'] = datetime.now() - start_time
+        #rdf['mention_criteria'] = 'NONE'#condition
+        #
+        #'''
+        #ADD GLOBAL STUDY VARIABLES TO THE RESULTS
+        #'''
+        #for key in study_traits:
+        #    rdf[key] = study_traits[key]
+
+
+
+        #output directory
+        apath     =         'agg_ouput_data/'
+        # aggrigated spreadsheet
+        save_name =apath+   'collection.csv'
+
+        #create directory if its not there
+        if not os.path.exists(apath):
+            os.mkdir(apath)
+        #save results data if it not there
+        if not os.path.exists(apath+save_name):
+            rdf.to_csv(save_name,index=False)
+        #otherwise append it
+        else:
+            ordf = pd.read_csv(save_name)#,index_col='index')
+            ordf  = ordf.append(rdf)
+            ordf.to_csv(save_name,index=False)
+
+        '''SAVE THE STUDY'''
+        study_path = apath+STUDY+'_study.csv'
+
+        if not os.path.exists(study_path):
+            rdf.to_csv(study_path,index=False)
+        else:
+            rsdf = pd.read_csv(study_path)
+            rsdf = rsdf.append(rdf)
+            rsdf.to_csv(study_path,index=False)
+        print('\n.\n.\n. savef! \n .\n.\n.')
+    except BaseException as b:
+        print('no save cuz:')
+        print(b)
