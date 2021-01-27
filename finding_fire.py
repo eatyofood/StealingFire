@@ -1245,4 +1245,28 @@ def sobar(df,title='TITLE HERE'):
     '''
     bar plot
     '''
-    df.iplot(theme='solar',kind='bar',title=title)
+    df.iplot(theme='solar',kind='bar',title=title)import numpy as np
+
+
+
+import pandas as pd
+import seaborn as sns
+
+def make_a_grid(df,col_one,col_two,content_col='final_pnl',plot=True):
+    cols = list(set(df[col_one].sort_values()))
+    rows = list(set(df[col_two].sort_values()))
+    rows
+    zs = np.zeros((len(rows),len(cols)))
+    gdf= pd.DataFrame(zs,columns=cols)
+    gdf.index = rows 
+    
+    for col in gdf.columns:
+        for row in gdf.index:
+            mask = df[df[col_one]==col] #& df['slow']==row]  
+            mask 
+            gdf[col][row] = mask[mask[col_two]==row][content_col]
+        
+    if plot == True:
+        sns.heatmap(gdf)
+
+    return gdf
