@@ -1220,6 +1220,8 @@ def save_function(results,STUDY):
         else:
             ordf = pd.read_csv(save_name)#,index_col='index')
             ordf  = ordf.append(rdf)
+            #drop duplicates
+            ordf = ordf.drop_duplicates()
             ordf.to_csv(save_name,index=False)
 
         '''SAVE THE STUDY'''
@@ -1230,6 +1232,8 @@ def save_function(results,STUDY):
         else:
             rsdf = pd.read_csv(study_path)
             rsdf = rsdf.append(rdf)
+            #drop duplicates
+            rsdf = rsdf.drop_duplicates()
             rsdf.to_csv(study_path,index=False)
         print('\n.\n.\n. savef! \n .\n.\n.')
     except BaseException as b:

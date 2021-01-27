@@ -201,7 +201,8 @@ for col in tdf.columns:
         
 
     # DONT MOVE THIS ONE!!!
-    except:
+    except BaseException as b:
+    	print(b)
         print('no data found for :',col)
         print('//////////////////////////////////////////////////////////')
         print('moving on')
