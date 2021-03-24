@@ -1245,14 +1245,19 @@ def sobar(df,title='TITLE HERE'):
     '''
     bar plot
     '''
-    df.iplot(theme='solar',kind='bar',title=title)import numpy as np
+    df.iplot(theme='solar',kind='bar',title=title)
 
-
+    
+import numpy as np
 
 import pandas as pd
 import seaborn as sns
 
-def make_a_grid(df,col_one,col_two,content_col='final_pnl',plot=True):
+def grid_map(df,col_one,col_two,content_col='final_pnl',plot=True):
+    '''
+    makes a grid for plotting varable differances and shit. 
+    '''
+    
     cols = list(set(df[col_one].sort_values()))
     rows = list(set(df[col_two].sort_values()))
     rows
