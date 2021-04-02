@@ -1275,3 +1275,389 @@ def grid_map(df,col_one,col_two,content_col='final_pnl',plot=True):
         sns.heatmap(gdf)
 
     return gdf
+def weekly_pull(df):
+    '''
+    TAKES: dataframe
+    RETURNS: weekly dataframe,  , with offset index to provide you with all the solid data
+        you would for sure have acceess to 
+        USEAGE:
+            this is designed to be used with weekly_push so you can add
+            indeicators to the weeklhy time frame and then push them
+            back into your main timeframe dataframe...
+    '''
+    # extract weekly function
+    df['week'] = df.index.week
+    df['year'] = df.index.year
+    df['week_id'] = df['year'].astype(str) + '_' + df['week'].astype(str)
+    df['index'] = df.index
+    df
+
+    df.index
+
+    df
+
+    df.groupby('week_id').agg('last')['index']
+    df.groupby('week_id').agg('first')['open']
+
+
+    INDEX = df.groupby('week_id').agg('last')['index'].astype(str)#.shift()
+    OPEN = df.groupby('week_id').agg('first')['open']
+    CLOSE = df.groupby('week_id').agg('last')['close']
+    HIGH = df.groupby('week_id').agg('max')['high']
+    LOW = df.groupby('week_id').agg('min')['low']
+    VOL = df.groupby('week_id').agg('sum')['volume']
+
+    cols = [INDEX,OPEN,LOW,HIGH,CLOSE,VOL]
+
+    wdf = pd.DataFrame(cols).T
+    
+    wdf['id'] = wdf.index
+    # shift the index so as to only show known data 
+    wdf['time'] = wdf['index']
+    wdf = wdf.set_index('time')
+    wdf.index = pd.to_datetime(wdf.index)
+    wdf = wdf.sort_values(wdf.index.name)
+    return wdf
+
+def weekly_push(df,wdf):
+    '''
+    TAKES: merges weekly dataframe into one with a shorter timeframe index. 
+    '''
+    
+    [wdf.rename(columns={col:('week_'+col)},inplace=True) for col in wdf.columns]
+
+    
+    wdf['week_index'] = wdf['week_index'].shift()
+    wdf['week_id'] = wdf['week_id'].shift(-1)
+    wdf = wdf.set_index('week_id')
+    wdf
+
+
+    # mix function 
+    mixdf = df.set_index('week_id').join(wdf).set_index('index')
+    mixdf.index = pd.to_datetime(mixdf.index)
+    #mixdf = mixdf.sort_values(mixdf.index)
+    mixdf
+
+    mixdf = mixdf.groupby(mixdf.index).agg('first')#.sort_values(mixdf.index)
+    return mixdf
+def monthly_pull(df):
+    '''
+    TAKES: dataframe
+    RETURNS: monthly dataframe,  , with offset index to provide you with all the solid data
+        you would for sure have acceess to 
+        USEAGE:
+            this is designed to be used with monthly_push so you can add
+            indeicators to the monthly time frame and then push them
+            back into your main timeframe dataframe...
+    '''
+    # extract monthly function
+    df['month'] = df.index.month
+    df['year'] = df.index.year
+    df['month_id'] = df['year'].astype(str) + '_' + df['month'].astype(str)
+    df['index'] = df.index
+    df
+
+    df.index
+
+    df
+
+    df.groupby('month_id').agg('last')['index']
+    df.groupby('month_id').agg('first')['open']
+
+
+    INDEX = df.groupby('month_id').agg('last')['index'].astype(str)#.shift()
+    OPEN  = df.groupby('month_id').agg('first')['open']
+    CLOSE = df.groupby('month_id').agg('last')['close']
+    HIGH  = df.groupby('month_id')['high'].agg('max') # IF YOU GET VALUE ERROR TOO MANY VALUES SWITCH COLUMN
+    LOW   = df.groupby('month_id')['low'].agg('min')
+    VOL   = df.groupby('month_id')['volume'].agg('sum')
+
+    cols = [INDEX,OPEN,LOW,HIGH,CLOSE,VOL]
+
+    wdf = pd.DataFrame(cols).T
+    
+    wdf['id'] = wdf.index
+    # shift the index so as to only show known data 
+    wdf['time'] = wdf['index']
+    wdf = wdf.set_index('time')
+    wdf.index = pd.to_datetime(wdf.index)
+    wdf = wdf.sort_values(wdf.index.name)
+    return wdf
+    
+def monthly_push(df,wdf):
+    '''
+    TAKES: merges monthly dataframe into one with a shorter timeframe index. 
+    '''
+    [wdf.rename(columns={col:('month_'+col)},inplace=True) for col in wdf.columns]
+
+    
+    wdf['month_index'] = wdf['month_index'].shift()
+    wdf['month_id'] = wdf['month_id'].shift(-1)
+    wdf = wdf.set_index('month_id')
+    wdf
+
+
+    # mix function 
+    mixdf = df.set_index('month_id').join(wdf).set_index('index')
+    mixdf.index = pd.to_datetime(mixdf.index)
+    #mixdf = mixdf.sort_values(mixdf.index)
+    mixdf
+
+    mixdf = mixdf.groupby(mixdf.index).agg('first')#.sort_values(mixdf.index)
+    return mixdf
+
+    INDEX = df.groupby('week_id').agg('last')['index'].astype(str)#.shift()
+    OPEN = df.groupby('week_id').agg('first')['open']
+    CLOSE = df.groupby('week_id').agg('last')['close']
+    HIGH = df.groupby('week_id').agg('max')['high']
+    LOW = df.groupby('week_id').agg('min')['low']
+    VOL = df.groupby('week_id').agg('sum')['volume']
+
+    cols = [INDEX,OPEN,LOW,HIGH,CLOSE,VOL]
+
+    wdf = pd.DataFrame(cols).T
+    
+    wdf['id'] = wdf.index
+    # shift the index so as to only show known data 
+    wdf['time'] = wdf['index']
+    wdf = wdf.set_index('time')
+    wdf.index = pd.to_datetime(wdf.index)
+    wdf = wdf.sort_values(wdf.index.name)
+    return wdf
+def this_or_that(df,up_target,dn_target):
+    '''
+    TAKES: two targets, up and down and tells you which one will happen first in the future
+    RETURNS:
+        df['up_bf_dn'] - column: True if up target was hit before dn target
+        df['up_bf_dn_x100'] - column: to scale with occilators like RSI
+        
+    '''
+    df['up_bf_dn'] = None
+    for i in trange(len(df)):
+    #i = 0
+
+        value = df['close'][i]
+        index = df.index[i]
+        uptarg= df[up_target][i]
+        dntarg= df[dn_target][i]
+        print('value:',value)
+        print('index:',index)
+        print('up:',uptarg)
+        print('dn:',dntarg)
+
+        #for i in range(len(df)):
+        up_or_down = None
+        qi   = i+1
+        try:
+            while up_or_down == None:
+
+                if df['high'][qi] > uptarg:
+                    up_or_down = True#'upped'
+                if df['low'][qi] < dntarg:
+                    up_or_down = False#'downed'
+                else:
+                    qi += 1
+                print(qi)
+            print(up_or_down)
+            df['up_bf_dn'][i] = up_or_down
+        except Exception:
+            pass
+    df['up_bf_dn'] = df['up_bf_dn'].replace(False,0)# = df['up_bf_dn']
+    df['dn_bf_up'] = (df['up_bf_dn']==False)
+    df['up_bf_dn_x100'] = df['up_bf_dn'] * 100
+    
+        
+        
+        
+
+import pandas_ta as pta
+def std_targets(df,up_multiple=2,dn_multiple=1):
+    '''
+    TAKES: df, up_mul , dn_mul
+    RETURNS: 
+        atr:
+        up_atr : 
+        dn_atr :
+    '''
+    df['atr'] =  pta.atr(df.high,df.low,df.close)
+    df['up_atr'] = df['close'] + (df.atr * up_multiple)
+    df['dn_atr'] = df['close'] - (df.atr * dn_multiple)
+'''
+DAILY DIGGS FUNCTIONS >>---->
+'''
+def say(words):
+    engine.say(words)
+    engine.runAndWait()
+
+def show_tweets(TICKER):
+    indi = []
+    for i in range(len(tdf)):
+        for t in tdf['hash'][i]:
+            if t == TICKER.upper():
+                indi.append(tdf.index[i])
+    return tdf.T[indi].T
+
+def is_algo_active_checker(df,algo_name,table_name):
+    '''
+    1)checks if the algo was triggered on df
+    2) checks if buy was triggered ( and tells you if it is )
+    3) appends a dictionary of current status on algo . 
+    4) TODO : updates a database with --a) algo status --b) algo history #start with just a dataframe for starters
+    5) TODO : plots data only if algo is active
+    '''
+    di = {}
+    di['algo_name'] = algo_name
+    di['table_name']= table_name
+    hit = False
+    if df['buy'][-1] == True: 
+        say('buy signal on {}'.format(ticker+' '+time_frame))
+        print('++++++++++++++++++++++++++++++++++++++++++++++BUY+++++++++++++++++++++++++++++++++++++++++',table_name)
+        hit = True
+        di['buy_signal_read'] = datetime.now()
+        di['buy_signal_time'] = df.index[-1]
+    if 'trac' in df.columns:
+        if (df['trac'][-2] == True) or (df['TRAC'][-2] == True):
+            hit = True
+            say('algo is active on {}'.format(table_name))
+            print('say algo is active on the thing!!!')
+            di['active_algo'] = True
+            di['target']      = df['TARG'][-2]
+            di['stoploss']    = df['STOP'][-2]
+            di['entry']       = df['ENTRY'][-2]
+    # INSERT --TRACKING TABLE-- UPDATE LOGIC
+    # if table_name in --TRACKING TABLE--.index 
+    #      - check if the algo was last active
+    #      - if was and is not now : 
+    #             - say ( '!!! yo are you out of this trade because you should be!!!')
+    #      - if it wasnt now it is :
+    #             - say ( !!! YO GET IN THIS TRADE !!!!)
+    #             - ASK ( ?DID YOU GET IN THIS TRADE YET?)
+    #                   - UPDATE: an active log with answer
+    # elif hit == True : ( and its not in --TRACKING TABLE--)
+    #      - ADD IT ! 
+    # this should also store a list of buy entry dates and check if there are new buy entry dates since last checking.
+    # make a fucking database function already 
+    if hit == False:
+        di = {}
+    return di 
+
+def merge_tweets_with_price(ticker,plot=True):
+    '''
+    this takes the index from mention grid(df) and merges
+    it with price data and plots it. 
+    '''
+    df['twitter_mentions'] = 0
+    # get a list of times ticker was tweeted
+    mention_dates = grid[grid[ticker]>0][ticker].index
+
+    for m in trange(len(mention_dates)):
+        try:
+            # grab first row  from isolated data after event 
+            first_data = df[df.index>mention_dates[m]].iloc[0].name
+            # either grab the in dex or insert cell directly 
+            df['twitter_mentions'][first_data] = 1
+        except IndexError:
+            pass
+
+    if plot == True:
+        jenay(df,scale_two='twitter_mentions',title=('TwitterMentions: '+ticker))
+        
+import sqlalchemy as sql
+import pandas as pd
+database        = 'twitter'
+table_name      = 'mention_index'
+merge_with_old  = True
+add_new_columns = True
+index_name      = None
+if_exists       = 'append'
+save_index      = True
+set_n_sort_index= True
+drop_duplicates = True
+def save_database(df,table_name,database='twitter',merge_with_old=True,add_new_columns=True,index_name=None,if_exists='append',save_index=True,set_n_sort_inde=True,drop_duplicates=True):
+    eng = sql.create_engine('postgresql://postgres:password@localhost/{}'.format(database))
+
+    # List tables 
+    con      = eng.connect()
+    tables   = eng.table_names()
+    table_df = pd.DataFrame(tables,columns=['tables'])
+    print(table_df)
+
+    if (table_name in list(tables)) and (merge_with_old == True):
+    #Load Data From The Base
+        a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng)
+        if set_n_sort_index:
+            if index_name == None:
+                a = a.set_index(df.index.name)
+                a = a.sort_values(a.index.name)
+            else:
+                a = a.set_index(index_name)
+                a = a.sort_values(index_name)
+                    #Drop Duplicates
+        if drop_duplicates == True:
+            a = a.drop_duplicates()
+            a = a[~a.index.duplicated(keep='first')]
+        if merge_with_old == True:
+            df = df[df.index>a.index[-1]]
+            df = a.append(df)
+
+
+
+        # Add Columns If Not In Database
+        if add_new_columns == True:
+            left_overs = set(df.columns) - set(a.columns)
+            print('columns in Database:',len(left_overs),left_overs)
+            if len(left_overs) > 0:
+                for col in left_overs:
+                    con.execute('ALTER TABLE {} ADD COLUMN "{}" TEXT NULL;'.format(table_name,col))
+        else:
+            # only append those that are already in database
+            df = df[a.columns]
+
+    
+    # Save Data To Base
+    df.to_sql(table_name,con,if_exists = if_exists, index = save_index)
+    print('SAVED!:',table_name,'DATABASE:',database)
+
+    con.close()
+
+def pull_database( database,table_name=None):
+    '''
+    if table_name is None it will return list of tables
+    '''
+    eng = sql.create_engine('postgresql://postgres:password@localhost/{}'.format(database))
+    # List tables 
+    con      = eng.connect()
+    tables   = eng.table_names()
+    table_df = pd.DataFrame(tables,columns=['tables'])
+    print(table_df)
+    if table_name == None:
+        con.close()
+        return None
+    else:
+        if table_name in tables:
+            #Load Data From The Base
+            a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng)
+            return a 
+ticker = 'ETH'
+time_frame = '1d'
+start_date = '2020-03-01-00-00'
+
+
+cryptos = ['ELGD','BTC','ORN','ETH']
+#if ticker in cryptos:
+from Historic_Crypto import HistoricalData 
+
+def get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00'):
+    coin = ticker.upper() + '-USD'
+    print(coin)
+    #timeframes
+    if time_frame == '1d':
+        seconds = 86400
+    if time_frame == '1hr':
+        seconds = 3600
+    if time_frame == '15min':
+        seconds = 900
+
+    df = HistoricalData(coin,granularity=seconds ,start_date=start_date).retrieve_data()
+    return df
