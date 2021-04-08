@@ -21,7 +21,7 @@ results = []
 import pandas_ta as pta 
 import talib
 
-def short_line_algo(df,plot=True):
+def short_line_algo(df,plot=True,title=''):
     '''
     Short Line Candel Algo --- 
     '''
@@ -42,7 +42,8 @@ def short_line_algo(df,plot=True):
     # === 
     # === 
     #for RSI_THRESH in rsis:
-
+    if title != None:
+        title = ('ShortLine:'+title)
 
     pct_targets(df,up_pct=UP_PCT,dn_pct=DN_PCT)
     df['SHORTLINE'] = talib.CDLSHORTLINE(df.open,df.high,df.low,df.close).replace(100,True)
@@ -64,14 +65,14 @@ def short_line_algo(df,plot=True):
         df['buy'] = (df['buy'] == True ) & ( df[CONDITION] == True)
 
     if plot == True:
-        jenay(df,scale_one='buy')
+        jenay(df,scale_one='buy',title=title)
 
 
     # dont even run the backtest if theres no signals
 
     if len(df[df['buy']==True])>0:
         strat_name = 'Candel_'+'Mention:'+'-one_stop'+'_UP:'+str(UP_PCT) + '_DN:' + str(DN_PCT) 
-        result = one_stop(df,plot=plot,strat_name=strat_name)
+        result = one_stop(df,plot=plot,strat_name=title)
         #result['ticker'] = col
         #result['buy_cap']= BUY_LIMIT
         results.append(result)
@@ -79,7 +80,7 @@ def short_line_algo(df,plot=True):
 
 
         strat_name ='Candel_'+ 'Mention:'+'-vally_stop'+'_UP:'+str(UP_PCT) + '_DN:' + str(DN_PCT) 
-        result = vally_stop(df,plot=plot,strat_name=strat_name)
+        result = vally_stop(df,plot=plot,strat_name=title)
         #result['ticker'] = col
         #result['buy_cap']= BUY_LIMIT
         results.append(result)

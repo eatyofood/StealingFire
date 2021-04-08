@@ -69,7 +69,7 @@ def get_some(ticker,time_frame='1hr'):
         b) 1hr
         c) 1d
     '''
-    cryptos = ['EGLD','BTC','ORN','ETH']
+    cryptos = ['EGLD','BTC','ORN','ETH','CEL']
     if ticker in cryptos:
         print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
         df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
@@ -91,7 +91,7 @@ def get_some(ticker,time_frame='1hr'):
             dtype = 'historical-chart/15min'
 
 
-        url = ("https://financialmodelingprep.com/api/v3/{}/{}?apikey={}").format(dtype,ticker,config.fin_model)
+        url = ("https://financialmodelingprep.com/api/v3/{}/{}?apikey=26815f601e2c459e55a4510a897ea5dd").format(dtype,ticker)
         data = get_jsonparsed_data(url)
         df = pd.DataFrame(data)
         if 'date' in df.columns:
@@ -251,32 +251,39 @@ import sqlalchemy as sql
 username = 'super_trades'
 count = 300#int(input('how many you want?'))
 def extract_tickers(s):
-        '''
-        give me tweets i spit out a list of words with NO DIGITS that had
-        hash tag "$" in the word
-        '''
+    '''
+    give me tweets i spit out a list of words with NO DIGITS that had
+    hash tag "$" in the word
+    '''
+    punc = '''!()-[]{};:'"\, <>./?@#$%^&*_~'''
+    #s = df['Text'][5]
+    #print(s)
+    # grab Dollars
+    s = [w for w in s.split(' ') if '$' in w]
+    #print(s)
+    goodli = []
+    for w in s:
+        w = w.replace('\n','').upper()#.replace('(','')
+        for c in w:
+            if c in punc:
+                w = w.replace(c,'')
+                #print('removing-------------',c)
+        result = ''.join([i for i in w if not i.isdigit()])
+        #print('RESULT:',result, 'WORD:',w)
         
-        #s = df['Text'][5]
-        #print(s)
-        # grab Dollars
-        s = [w for w in s.split(' ') if '$' in w]
-        #print(s)
-        goodli = []
-        for w in s:
-            result = ''.join([i for i in w if not i.isdigit()])
-            #print('RESULT:',result, 'WORD:',w)
-            if len(w) == len(result):
-                #print('====GOOD====',w)
-                goodli.append(re.sub(r'\d+', '', w.replace('$','')))
-            else:
-                #print('====NAH====',w)
-                pass
+        
+        if len(w) == len(result):
+            #print('====GOOD====',w)
+            
+            goodli.append(re.sub(r'\d+', '', w.replace('$','')))
+        else:
+            #print('====NAH====',w)
+            pass
 
 
 
-        #print(goodli)
-        return goodli
-
+    #print(goodli)
+    return goodli
         
 def twit_grid(df,username):
     '''

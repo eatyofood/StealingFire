@@ -1270,10 +1270,13 @@ def grid_map(df,col_one,col_two,content_col='final_pnl',plot=True):
             mask = df[df[col_one]==col] #& df['slow']==row]  
             mask 
             gdf[col][row] = mask[mask[col_two]==row][content_col]
-        
+    # Sorting Values 
+    gdf = gdf.T[sorted(gdf.index)].T
+    gdf = gdf[sorted(gdf.columns)]
+    
     if plot == True:
         sns.heatmap(gdf)
-
+    
     return gdf
 def weekly_pull(df):
     '''
@@ -1633,7 +1636,7 @@ def pull_database( database,table_name=None):
     print(table_df)
     if table_name == None:
         con.close()
-        return None
+        return table_df # this was tables i hope i didnt just break it...
     else:
         if table_name in tables:
             #Load Data From The Base
