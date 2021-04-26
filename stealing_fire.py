@@ -1,3 +1,12 @@
+import re
+import pandas as pd
+import pretty_errors
+import shutil 
+from tqdm import trange
+import time
+import os
+from datetime import datetime
+import sqlalchemy as sql
 import cufflinks as cf
 import numpy as np
 cf.go_offline(connected=False)
@@ -9,7 +18,847 @@ import seaborn as sns
 import pandas_ta as pta
 import pandas_datareader as pdr
 import time
+from fastquant import backtest
+from finding_fire import jenay, weekly_pull,weekly_push, monthly_pull,monthly_push,one_stop,vally_stop,bipolar,pct_targets,sobar,hl,sola,short_frame,the_twelve
 
+
+# XXX GOING TO BE CLEANINGN HOUSE SOON XXX 
+
+'''
+many of these functions are outdated. 
+finding_fire will be researved for : 
+    - RESEARCH
+    - BACKTESTING
+stealing_fire will be reserved for : 
+    - databaseing
+    - server interation
+    - trading tools
+    - broking api's
+        - webull
+        - coinbase
+        - binance
+        - exct. 
+    - scraping tools 
+    - twitter tools ... 
+
+
+'''
+
+# TODO: 
+#      start going through and marking things for deconstruction or relocation
+#      being carefull not to remove anything thats going to throw a wrench into 
+#      perctectly nice functioning systems .... ohhhh boy!!! 
+#
+#      - clean twitter shit up
+
+### ---MOVE THE ALGOS TO PHENIX--- ( needs a cooler name how about the : Temple_Of_AlgoRand...)
+## and then battle ready algoFunctions go in active....
+
+
+
+def easybake_fastquant(df,result):
+    '''
+    takes your backtest dataframe from one_stop or vally_stop
+        RUNS THE SAME TEST WITH FAST QUANT : 
+            and mixes the results
+        
+    '''
+    
+    #Convert the "buy" Column into FastQuant Format 
+    df['buy'] = df['buy'].replace(True,1).replace(False,0)
+    # Createing Sell Signal
+    for i in range(1,len(df)-1):
+        if (df['trac'][i] == False) & (df['trac'][i-1] == True):
+            df['buy'][i] = -1
+
+    #hl(df[['TRAC','trac','buy']])
+    fq_result = backtest(
+                    strategy      = 'ternary',
+                    data          = df,
+                    custom_column = 'buy',
+                    init_cash     = 1000,
+                    plot          = False,
+                    )
+
+    result = result.join(fq_result)
+    return result
+      
+
+def back_burner_buysignal(buy,RSI_THRESH=40):
+    '''
+    Adds Buy column
+    BUY OPTIONS:
+        1. first_oversold
+        2. TODO: add more
+        
+    '''
+    m1,m2,m3,m4,m5 = 5,15,25,50,100
+    df['ma1']  = df.close.rolling(m1).mean()
+    df['ma2']  = df.close.rolling(m2).mean()
+    df['ma3']  = df.close.rolling(m3).mean()
+    df['ma4']  = df.close.rolling(m4).mean()
+    df['ma5']  = df.close.rolling(m5).mean()
+    df['reset'] = df['ma4'] < df['ma5']
+    df['bull_run'] = (df['ma1']>df['ma2']) & ( df['ma2']>df['ma3'])&(df['ma3']>df['ma4'])&(df['ma4']>df['ma5'])
+    df['first_bull'] = (df['bull_run'] == True ) & (df['bull_run'].shift() == False )
+    #RSI
+    
+    df['rsi']              = pta.rsi(df.close)
+    df['low_rsi']          = df['rsi'] < RSI_THRESH
+    df['last_rsi_was_low'] = df['low_rsi'].shift()
+    #Alternate between First Bull Run and Signal
+    bipolar(df,'first_bull','low_rsi','waiting')
+    #Buy signals
+    df['first_oversold'] = (df['waiting'].shift() == True) & ( df['low_rsi']==True) #& (df['waiting_on_bullrun']==False)
+    ## for now the only one
+    df['buy'] = df[buy]
+
+
+
+    if plot == True:
+        jenay(df,scale_one='waiting',scale_two='first_oversold')
+
+
+def falcon_backtest(df,mydic,research_project=None):
+    '''
+    TAKES: 
+        1) price dataframe with buy signals 
+        2) paramater_dictionary
+        3) and research_project name (optional)
+    RETURNS:
+        1) backtest results in the form of oa dataframe. 
+        2) appends the data to the research dump database table
+        3) creates or appends a :'research_project' table 
+            - for what ever specific project  you are working on  
+    '''
+    if len(df[df['buy'] == True]):
+        # Simulate Trades
+        result = one_stop(df,
+                  strat_name=str(mydic),
+                  plot=plot,
+                  plot_capital=plot)
+        # Add Conditions & Params to Results Data
+        for i in mydic.keys():
+            if mydic[i] != None:
+                result[i] = mydic[i]
+        result['target_type'] = 'one_stop' 
+        #Fast Quant Your Face
+        try:
+            result = easybake_fastquant(df,result)
+        except:
+            pass
+
+        result['algo_type']    = 'one_stop' 
+        result['start_date']   = df.index[0]
+        result['end_date']     = df.index[-1]
+        if '.csv' in sheet:
+            result['security'] = sheet.split(' ')[1]
+        results.append(result)
+        
+        '''
+        DATABASE ZONE:
+            1. save to repo-dump
+            2. if project_name is not none. also save everything in that project table
+            
+            SIDENOTE: IF THIS SLOWS BACKTEST'S DOWN TO MUCH 
+                GOBACK, to doing them in bundles...
+        '''
+        push_database(result,'ResearchDump','research',save_index=True,drop_duplicates=True,time_series=False)#,index_name='strat_name')
+        if research_project != None:
+            push_database(result,research_project,'research',save_index=True,drop_duplicates=True,time_series=False)#,index_name='strat_name')
+
+        return result
+        
+        
+
+def push_database(df,table_name,database='twitter',time_series=True,add_new_columns=True,index_name=None,if_exists='append',save_index=True,set_n_sort_index=True,drop_duplicate_index=True,drop_duplicates=True,address= None):
+    '''
+    SIMPLIFY SIMPLIFY SIMPLIFY - dave
+    takes a pandas dataframe . 
+        - creates table if not exissts
+        - or appends the original ( droping duplicates)
+            - including adding columns that wern't there. 
+
+    
+    '''
+    if address == None:
+        address = 'postgresql://postgres:password@localhost/'
+    eng = sql.create_engine(f'{address}{database}')
+    
+    # List tables 
+    con      = eng.connect()
+    tables   = eng.table_names()
+    table_df = pd.DataFrame(tables,columns=['tables'])
+    #print(table_df)
+
+    if (table_name in list(tables)) :#and (merge_with_old == True):
+    #Load Data From The Base
+        a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng)
+        
+        saved_already = False
+        if drop_duplicate_index == True:
+            print('dropping duplicated index')
+            a = a.drop_duplicates()
+            a = a[~a.index.duplicated(keep='first')]
+        if drop_duplicates == True:
+            a = a.drop_duplicates()
+
+        if time_series == True:
+            print('time series data')
+            print('original length:',len(df))
+            df = df[df.index>a.index[-1]]
+            print('length after mask:',len(df))
+            print('origianl data series:',len(a))
+            df = a.append(df)
+            print('now with updated data:',len(df))
+        
+        # Add Columns If Not In Database - 
+        '''
+        THIS IS THE QUICKEST SOLUTION  FOR NOT ADDING COLUMNS. 
+            - im just replace the database table after merging old and new in pandas
+        '''
+        if add_new_columns == True:
+            left_overs = set(df.columns) - set(a.columns)
+            print('columns in Database:',len(left_overs),left_overs)
+            if len(left_overs) > 0:
+                print('you have new columns:')
+
+
+                df = a.append(df)
+                # Save Data To Base
+                df.to_sql(table_name,con,if_exists = 'replace' , index = save_index)
+                print('REPLACED!:',table_name,'DATABASE:',database)
+                print('had to replace it with new columns')
+                saved_already = True
+                #for col in left_overs:
+                #    con.execute('ALTER TABLE "{}" ADD COLUMN "{}" TEXT NULL;'.format(table_name,col))
+        if set_n_sort_index:
+            if index_name == None:
+                try:
+                    a = a.set_index(df.index.name)
+                    a = a.sort_values(a.index.name)
+                except:
+                    pass
+            else:
+                try:
+                    a = a.set_index(index_name)
+                    a = a.sort_values(index_name)
+                        #Drop Duplicates
+                except:
+                    pass
+            
+
+
+        if saved_already == False:
+            if drop_duplicates == True:
+                # Save Data To Base
+                df.drop_duplicates().to_sql(table_name,con,if_exists = if_exists, index = save_index)
+                print('SAVED!:',table_name,'DATABASE:',database)
+            else:
+                # Save Data To Base
+                df.to_sql(table_name,con,if_exists = if_exists, index = save_index)
+                print('SAVED!:',table_name,'DATABASE:',database)
+    else:
+        df.to_sql(table_name,con,if_exists = if_exists, index = save_index)
+        print('SAVED!:',table_name,'DATABASE:',database)
+
+    
+    
+    con.close()
+        
+
+
+def pull_database( database,table_name=None):
+    '''
+    simplify returning a database...
+    if table_name is None it will return list of tables
+    '''
+    eng = sql.create_engine('postgresql://postgres:password@localhost/{}'.format(database))
+    # List tables 
+    con      = eng.connect()
+    tables   = eng.table_names()
+    table_df = pd.DataFrame(tables,columns=['tables'])
+    #print(table_df)
+    if table_name == None:
+        con.close()
+        return table_df
+    else:
+        if table_name in tables:
+            #Load Data From The Base
+            a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng)
+            return a 
+
+'''
+-----------------------------------------PRICE SCRAPE--------------------------------------------------------
+'''
+
+from urllib.request import urlopen
+import json
+import os
+import pandas as pd
+import config
+import pandas_datareader as pdr 
+from Historic_Crypto import HistoricalData
+
+
+def get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00'):
+    coin = ticker + '-USD'
+    print(coin)
+    #timeframes
+    if time_frame == '1d':
+        seconds = 86400
+    if time_frame == '1hr':
+        seconds = 3600
+    if time_frame == '15min':
+        seconds = 900
+
+    df = HistoricalData(coin,granularity=seconds ,start_date=start_date).retrieve_data()
+    return df
+
+
+def get_jsonparsed_data(url):
+    """
+    Receive the content of ``url``, parse it as JSON and return the object.
+
+    Parameters
+    ----------
+    url : str
+
+    Returns
+    -------
+    dict
+    """
+    response = urlopen(url)
+    data = response.read().decode("utf-8")
+    return json.loads(data)
+
+
+def dnld_daily(ticker):
+    '''
+    This downloads free daily data by scraping yahoo finace
+    '''
+    print('getting daily')
+    df = pdr.get_data_yahoo(ticker)
+    [df.rename(columns={col:col.lower()},inplace=True) for col in df.columns]
+    os.system('figlet {}'.format(ticker))
+    #print(df)
+    return df
+
+
+def get_some(ticker,time_frame='1hr'):
+    '''
+    time_frame(s): str
+        a) 15min
+        b) 1hr
+        c) 1d
+    '''
+    #standardize time frame 
+    time_frame = time_frame.lower()
+    cryptos = ['EGLD','BTC','ORN','ETH','CEL']
+    if ticker in cryptos:
+        print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
+        df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
+    elif time_frame == '1d':
+        df = dnld_daily(ticker)
+        # standardize
+        df.index.name = 'date'
+    else:
+        if time_frame == '1hr':
+            dtype = 'historical-chart/1hour'
+
+        if time_frame == '15min':
+            dtype = 'historical-chart/15min'
+
+        url = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        data = get_jsonparsed_data(url)
+        df = pd.DataFrame(data)
+        if 'date' in df.columns:
+            df = df.set_index('date')
+            # is this fixed?------this may still eror out so shift this under the if statment
+            df.index = pd.to_datetime(df.index)
+
+            df = df.sort_values('date')
+    return df 
+
+
+
+
+def price(ticker,time_frame,plot=False):
+    '''
+    downloads and saves stock data to database
+    Takes:
+        1. TICKER : str
+        2. TIME_FRAME : str
+            a) 15min
+            b) 1hr
+            c) 1d
+    '''
+
+    df = get_some(ticker,time_frame)
+
+    table_name = ticker + '_' +time_frame
+    odf=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng).set_index('date')
+    
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+    print('DOWNLOADED:',ticker,' :',time_frame)
+    
+    if plot == True:
+        jenay(df)
+    return df
+
+
+def price_updater(ticker):
+    '''
+     ::: daily maintenince to update database :::
+    '''
+    # Download Fifteen Minute
+    dtype  = '15min'
+    df = get_some(ticker,dtype)
+
+    table_name = ticker + '_' +dtype
+
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+    print('DOWNLOADED:',ticker,' :',dtype)
+    df
+    time.sleep(2)
+
+    # Download One Hour
+    dtype  = '1hr'
+    df = get_some(ticker,dtype)
+
+    table_name = ticker + '_' +dtype
+
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+    print('DOWNLOADED:',ticker,' :',dtype)
+    df    
+    time.sleep(2)
+    
+    # Daily Data
+    dtype = '1d'
+    df = get_some(ticker,dtype)
+    
+    table_name = ticker + '_' + dtype
+    
+    # save to db
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+    print('DOWNLOADED:',ticker,' :',dtype)
+    
+
+
+
+
+
+'''
+------------------------------------------TWITTER ZONE ---------------------------------------------------------------------------------
+'''
+
+
+import pyttsx3
+engine = pyttsx3.init()
+engine.setProperty('rate',150)
+def say(words):
+    engine.say(words)
+    engine.runAndWait()
+
+def show_tweets(TICKER):
+    indi = []
+    for i in range(len(tdf)):
+        for t in tdf['hash'][i]:
+            if t == TICKER.upper():
+                indi.append(tdf.index[i])
+    return tdf.T[indi].T
+
+def merge_tweets_with_price(ticker,plot=True):
+    '''
+    this takes the index from mention grid(df) and merges
+    it with price data and plots it. 
+    TAKES:
+        1. ticker_col from grid_df
+        2. mixes it with whatever datetime frame df is ...( also global ) 
+        3. plot the mentions
+    '''
+    df['twitter_mentions'] = 0
+    # get a list of times ticker was tweeted
+    mention_dates = grid[grid[ticker]>0][ticker].index
+
+    for m in trange(len(mention_dates)):
+        try:
+            # grab first row  from isolated data after event 
+            first_data = df[df.index>mention_dates[m]].iloc[0].name
+            # either grab the in dex or insert cell directly 
+            df['twitter_mentions'][first_data] = 1
+        except IndexError:
+            pass
+
+    if plot == True:
+        jenay(df,scale_two='twitter_mentions',title=('TwitterMentions: '+ticker))
+
+def first_mentions(grid):
+    '''
+    Cross refrences twitter database with fresh tweets coming in to identify anything new
+        - archives the first date new data was loged 
+        - as well as the datetime of tweet 
+        - 
+    '''
+
+
+    # pull old data
+    table_name = 'mention_index'
+    try:
+        idf = pull_database('twitter',table_name).set_index('ticker')
+        index_list = idf.index
+    except:
+        index_list = []
+    # frame the grid
+    gdf = pd.DataFrame(grid.sum(),columns=['mentions'])
+    gdf = gdf[gdf['mentions']>0]
+    df  = grid[gdf.index]
+    df  = df.sort_values(df.index.name)
+    #get first dates
+    
+    li = []
+    for col in df.columns:
+        di = {}
+        di['ticker']          = col
+        di['first_mentioned'] = df[df[col]>0].index[0]
+        di['discovered']      = datetime.now()
+        li.append(di)
+        print(di)
+    fmdf = pd.DataFrame(li).set_index('ticker')
+    print(fmdf)
+    unlisted = [t for t in fmdf.index if t not in index_list ]
+    if len(unlisted) > 0:
+        for i in unlisted:
+            message = 'new ticker mentioned {}'.format(i)
+            say(message)
+            print(message)
+        # isolate unseen tickers
+        fmdf = fmdf.T[unlisted].T
+        #append database
+        save_database(fmdf,table_name,save_index=True,merge_with_old=False)
+    else:
+        print('no new tickers')
+        say('no new tickers')
+
+
+
+
+# Imports
+import tweepy
+import pandas as pd
+import time
+
+## Credentials and Authorization
+from config import consumer_key
+from config import consumer_secret
+from config import access_token
+from config import access_token_secret
+
+
+auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+auth.set_access_token(access_token, access_token_secret)
+api = tweepy.API(auth,wait_on_rate_limit=True)
+
+tweets = []
+
+def username_tweets_to_csv(username,count):
+    try:      
+        # Creation of query method using parameters
+        tweets = tweepy.Cursor(api.user_timeline,id=username).items(count)
+
+        # Pulling information from tweets iterable object
+        tweets_list = [[tweet.created_at, tweet.id, tweet.text] for tweet in tweets]
+
+        # Creation of dataframe from tweets list
+        # Add or remove columns as you remove tweet information
+        tweets_df = pd.DataFrame(tweets_list,columns=['Datetime', 'Tweet Id', 'Text'])
+
+        # Converting dataframe to CSV 
+        import os
+        tpath='fresh_data/'
+        if not os.path.exists(tpath):
+        	os.mkdir(tpath)
+        
+        #ARCHIVE HERE!
+        tweets_df = tweets_df.set_index('Datetime')
+        # subtract 4 hours from GMT to be EST: best time ever!
+        tweets_df.index = tweets_df.index - pd.Timedelta(hours=4)
+
+        sheet = (tpath+'{}-tweets.csv'.format(username))
+        
+        tweets_df.to_csv(sheet)
+        
+    except BaseException as e:#except BaseException as e:
+          print('failed on_status,',str(e))
+          time.sleep(3)
+
+
+
+def extract_tickers(s):
+    '''
+    give me tweets i spit out a list of words with NO DIGITS that had
+    hash tag "$" in the word
+    '''
+    punc = '''!()-[]{};:'"\, <>./?@#$%^&*_~'''
+    #s = df['Text'][5]
+    #print(s)
+    # grab Dollars
+    s = [w for w in s.split(' ') if '$' in w]
+    #print(s)
+    goodli = []
+    for w in s:
+        w = w.replace('\n','').upper()#.replace('(','')
+        for c in w:
+            if c in punc:
+                w = w.replace(c,'')
+                #print('removing-------------',c)
+        result = ''.join([i for i in w if not i.isdigit()])
+        #print('RESULT:',result, 'WORD:',w)
+        
+        
+        if (len(w) == len(result)) & (len(w)>0):
+            #print('====GOOD====',w)
+            
+            goodli.append(re.sub(r'\d+', '', w.replace('$','')))
+        else:
+            #print('====NAH====',w)
+            pass
+    #print(goodli)
+    return goodli
+
+
+
+def twit_grid(df,username):
+    '''
+    turns "hash" column ( list of tickers ) into a datetime grid (dataframe)
+    '''
+
+
+    for i in trange(len(df)):
+        ticli = df['hash'][i]
+
+        for tic in ticli:
+            tic = tic.upper()
+            if tic not in df.columns:
+                df[tic] = 0
+            else:
+                df[tic][i] = 1
+
+
+    # eliminate rows that dont contain ticker symbols
+    df = df[df['hash'].apply(len)>0]
+
+    boring = ['Tweet Id','Text','hash','tic_count']
+    #hl(df)
+
+    sola(df.drop(boring,axis=1).rolling(12).sum(),title='Rolling Twelve')
+
+    # Grid
+    df = df.drop(boring,axis=1)
+
+    # Now Create Data Tables For Grid
+    eng = sql.create_engine('postgresql://postgres:password@localhost/twitter')
+    
+    # List tables 
+    con = eng.connect()
+    table_name = username + '_grid'
+    tables = eng.table_names()
+    print(tables)
+    print(table_name)
+
+    if table_name in tables:
+        #Load Data From The Base
+        a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng).set_index('Datetime')
+
+        # Add Columns If Not In Database
+        left_overs = set(df.columns) - set(a.columns)
+        left_overs = [col for col in left_overs if len(col)> 0]
+        print('columns in Database:',len(left_overs),left_overs)
+        if len(left_overs) > 0:
+            for col in left_overs:
+                
+                con.execute('ALTER TABLE {} ADD COLUMN "{}" TEXT NULL;'.format(table_name,col))
+
+    # Save Data To Base
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+
+    con.close()
+    return df
+
+def twitter(username,count):
+    '''
+    UPDATES A DATABASE WITH TWEETS:
+    RETURNS:
+        1) tweet_df 
+        2) grid_df
+        
+
+    '''
+    table_name = username.replace('@','')
+
+    # Established Database Connection
+    eng = sql.create_engine('postgresql://postgres:password@localhost/twitter')
+    con = eng.connect()
+    # Table Names
+    print()
+    tables = eng.table_names()
+    if table_name in tables:
+        a=pd.read_sql_query('select * from "{}"'.format(username),con=eng).set_index('Datetime')
+        ## TODO: ADD THE UNIQUE ROWS SCRIPT HERE!!
+
+    # Next Up: Insert Scrape Function
+    #from Scrape import username_tweets_to_csv
+
+
+    # SCRAPING USERNAME
+    username_tweets_to_csv(username, count)
+
+    # Load Data
+    df = pd.read_csv('fresh_data/'+username+'-tweets.csv').set_index('Datetime')
+
+    df['hash'] = df['Text'].apply(extract_tickers)
+    df
+
+    #df = df[df['hash'].apply(len)>0]
+
+    df['tic_count']  = df['hash'].apply(len)
+    # List tables 
+
+
+    # Save Data To Base
+    df.to_sql(table_name,con,if_exists = 'append', index = True)
+
+    # Table Names
+    print(eng.table_names())
+
+
+    #Load Data From The Base
+    #a=pd.read_sql_query('select * from "PW_15min"',con=eng)
+
+
+
+    con.close()
+    print('IT WORKED')
+    
+    # if returned tweets dont have any ticker symbols dont try to make a grid 
+    #try:
+    grid = twit_grid(df,username)
+    #except:
+    #    grid = None
+        
+    return df,grid
+
+
+
+tweets = []
+
+def text_query_to_csv(text_query,count):
+
+    '''
+    SCRAPE TWITTER BASED ON TEXT / HASH TAG
+    '''
+
+    #try:
+    # Creation of query method using parameters
+    tweets = tweepy.Cursor(api.search,q=text_query).items(count)
+
+    # Pulling information from tweets iterable object
+    tweets_list = [[tweet.created_at, tweet.id, tweet.text,tweet.retweet_count,tweet.favorited,tweet.author.followers,tweet.user] for tweet in tweets]
+
+    # Creation of dataframe from tweets list
+    # Add or remove columns as you remove tweet information
+    tweets_df = pd.DataFrame(tweets_list,columns=['Datetime', 'Tweet Id', 'Text','retweet_count','favorited','followers','user'])
+
+    # Converting dataframe to CSV 
+    tweets_df.to_csv('{}-tweets.csv'.format(text_query), sep=',', index = False)
+    return tweets_df
+
+
+
+def twitter_hashtag(text,count,plot=True):
+    '''
+    returns rates of tweets and retweet rates. 
+    saves an archive of that ino
+    the actual tweet dataframe is saved in the retweet_df column. ( if its not being retweeted its not worth it)
+    returns the info df
+    '''
+    # tweepy function
+    df = text_query_to_csv(text,count)
+
+    # Fix  Index and Run Calculations
+
+    df = df.set_index('Datetime')
+    df.index = df.index - pd.Timedelta(hours=4)
+
+    # aggrigating usefull data to archive for backtest's
+    tweet_retweeted = len(df[df['retweet_count']>0])
+    retweet_df      = df[df['retweet_count']>0]
+    fav_len         = len(df[df['favorited']==True])
+    retweet_sum = retweet_df['retweet_count'].sum()
+    fav_len         = len(df[df['favorited']==True])
+    start_time      = df.index[0]
+    last_time       = df.index[-1]
+    time_delta      = start_time - last_time
+    rate_multiple   = pd.Timedelta(hours=1)/time_delta
+    tweets_per_hour = 400 * rate_multiple
+
+
+    # Save To a Dictionary
+
+    di = {}
+    di['fav_len']        = fav_len
+    di['start_time']     = start_time
+    di['last_time']      = last_time
+    di['time_delta']     = time_delta
+    di['rate_multiple']  = rate_multiple
+    di['tweets_per_hour']= tweets_per_hour
+    di['tweet_retweeted'] = tweet_retweeted
+    di['retweet_df']      = retweet_df
+    di['fav_len']         = fav_len
+    di['retweet_sum']     = retweet_sum
+    # tweet info df
+    tidf = pd.DataFrame([di])
+    tidf['tweets_per_second'] = (tidf['tweets_per_hour']/60)/60
+    tidf
+
+    text
+    
+    # append archive or create it if not exists
+    apath = text+'_tweetArchive.csv'
+    if not os.path.exists(apath):
+        tidf.to_csv(apath,index=False)
+        print('doesnt exist: createing sheet')
+    else:
+        oldf = pd.read_csv(apath)
+        ndf  = oldf.append(tidf)
+        ndf.to_csv(apath,index=False)
+        print('it exists: appending it')
+
+
+
+    print('tweets_per_hour:',tweets_per_hour)
+
+    # Data Log
+    ndf
+
+    #making the index the last recorded data
+    ndf = ndf.set_index('last_time')
+    ndf
+
+    # Plots
+
+
+    if plot == True:
+        from finding_fire import sola,sobar
+
+        sola(ndf[['rate_multiple','tweet_retweeted']],title='Retweets And RateMultiple')
+
+        sola(ndf['tweets_per_hour'],title='Tweets Per Hour')
+        
+    return ndf
+
+###--------------------------------------------------------------------------------------------------
+# XXX MOVE TO FINDING XXX
 #SMAC - CON VAL FUNTION
 def smac_with_confirmation(df,validation,fast,slow,want_plot=False,standard_names=False):
     '''
@@ -80,6 +929,8 @@ def smac_with_confirmation(df,validation,fast,slow,want_plot=False,standard_name
 
     return df
 
+
+# OUTDATED?
 #FUNCTION
 def compile_signals(df,buy='buy',sell='sell'):
     '''
@@ -132,7 +983,7 @@ def hl(df):
     df = df.style.apply(highlight)
     return df
 
-
+#DAMN USEFULL
 def load_data(path,all_columns=False):
     df = pd.read_csv(path)
     [df.rename(columns={col:col.lower()},inplace = True) for col in df.columns]
@@ -152,6 +1003,7 @@ def load_data(path,all_columns=False):
         df = df[col_list]
     return df
 
+# BRING IT BACK (but also ) XXX MOVE TO FINDING XXX
 
 def my_backtest(df,custom_column='trac',plot_capital=False,return_df=False,strat_name='PUT STRATEGY HERE'):
     '''
@@ -261,10 +1113,11 @@ def plot_grid(path):
 
 
 
-
+# THIS HAS BEEN REPLACE : std_targets
 #ATR TARG - STOP GENERATOR - EXITS
 def atr_exits(df,dn_mul=1,up_mul=2,buy_trigger='buy'):
     '''
+    standar
     
     '''
     df['atr'] = pta.atr(df.high,df.low,df.close)
@@ -294,7 +1147,7 @@ def atr_exits(df,dn_mul=1,up_mul=2,buy_trigger='buy'):
     return df
 
 
-
+# XXX TRASH XXX 
 def plot_targets(df,title='ATR TARGETS'):
     '''
     takes:
@@ -319,7 +1172,7 @@ def plot_targets(df,title='ATR TARGETS'):
 
 
 
-
+# XXX TRASH XXX 
 #ARCHIVE FUNCTION
 def archive_data(path,sheet,df):
     '''
@@ -607,66 +1460,6 @@ def scale_close(column,df):
     col_name   = column+'scale'
     df[col_name] = df[column].replace(True,1).replace(1,df.close)
     return df
-
-
-
-#[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[ SCRAPER  ]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]
-api = '26815f601e2c459e55a4510a897ea5dd'
-from urllib.request import urlopen
-import json
-import os
-import pandas as pd
-
-def get_jsonparsed_data(url):
-    """
-    Receive the content of ``url``, parse it as JSON and return the object.
-
-    Parameters
-    ----------
-    url : str
-
-    Returns
-    -------
-    dict
-    """
-    response = urlopen(url)
-    data = response.read().decode("utf-8")
-    return json.loads(data)
-
-def save_dat_data(dtype,ticker,df):
-    sheet_name = (ticker+'_'+dtype.replace('/','_'))
-    p = 'downloaded_data/'
-    if not os.path.exists(p):
-        os.mkdir(p)
-    df.to_csv(p+sheet_name+'.csv')
-    
-def get_some(dtype,ticker):
-    url = ("https://financialmodelingprep.com/api/v3/{}/{}?apikey=26815f601e2c459e55a4510a897ea5dd").format(dtype,ticker)
-    data = get_jsonparsed_data(url)
-    df = pd.DataFrame(data)
-    save_dat_data(dtype,ticker,df)
-    return df 
-
-
-
-
-def get_price_data(ticker,time_frame='15min'):
-    dtype      = 'historical-chart/'+time_frame
-    df         = get_some(dtype,ticker)
-    print('got data!')
-    time.sleep(3)
-    df = df[::-1]
-    #df = df.set_index('data')
-
-    df.set_index('date')
-    save_name = 'data/'+ticker +'_' +time_frame + '.csv'
-    print(save_name)
-    if not os.path.exists('data/'):
-        os.mkdir('data/')
-    df.to_csv(save_name)
-    print('saved:',time_frame)
-    
-    
 
 
 def collect_stock_data(ticker):
@@ -1184,3 +1977,81 @@ def all_candels(df):
     df['UPSIDEGAP2CROWS'] = talib.CDLUPSIDEGAP2CROWS(df.open,df.high,df.low,df.close)
     df['XSIDEGAP3METHODS'] = talib.CDLXSIDEGAP3METHODS(df.open,df.high,df.low,df.close)
     return df
+
+candle_list = ['DOJI', #0
+               'EVENINGSTAR', #1
+               'MORNINGSTAR',#2
+               'SHOOTINGSTAR',#3
+               'HAMMER',#4
+               'INVERTEDHAMMER',#5
+               'HARAMI',#6
+               'ENGULFING',#7
+               'HANGINGMAN',#8
+               'PIERCING',#9
+               'BELTHOLD',#10
+               'KICKING',#11
+               'DARKCLOUDCOVER']#12
+
+
+def candle_buysignals(df,CANDLE,UP_PCT=20,DN_PCT=10,plot=False,CONDITION=None,STOCH=False,RSI_THRESH=None,RIZ_THRESH=None,*args,**kwargs):
+    '''
+    you can bring your own condition or 
+        built in conditions:
+            1.low_rsi
+            2.last_rsi_was_low
+            3.riz_corn
+            4.200_is_up
+            5.50_is_up
+            
+    '''
+    
+    # add main candles
+    the_twelve(df)
+    #Creating Conditions
+    #rsi --
+    df['rsi']              = pta.rsi(df.close)
+    df['low_rsi']          = df['rsi'] < RSI_THRESH
+    df['last_rsi_was_low'] = df['low_rsi'].shift()
+    
+    #riz -- 
+    df['riz']              = pta.rsi(df.close,length=2)
+    df['low_riz']          = df['riz'] < RIZ_THRESH
+    df['riz_corn']         = (df['low_riz']==False) & (df['low_riz'].shift()==True)
+    df['last_riz_was_low'] = df['low_riz'].shift() == True
+
+    #ma -- 200
+    df['ma_200']            = df.close.rolling(200).mean()
+    df['200_is_up']         = df['ma_200'] > df['ma_200'].shift()
+    #ma -- 50
+    df['ma_50']             = df.close.rolling(50).mean()
+    df['50_is_up']          = df['ma_50'] > df['ma_50'].shift()
+
+
+    #riz and forward facing ma
+    df['riz_and_upslug'] = (df['200_is_up'] == True) & (df['low_riz'] == True)
+
+    #buy
+    df['buy'] = df[CANDLE].replace(100,True).replace(-100,False).replace(0,False)
+
+    if CONDITION != None:
+        if plot == True:
+            # i could pass a dic into jenay , hahahah already did 
+            jenay(df,scale_one=CONDITION,scale_two='buy',title =CANDLE+ ' Condition: ' + CONDITION )
+            
+    print(len(df[df['buy']==True]))
+    if CONDITION != None:
+            # add condition to buy column
+            df['buy'] = (df['buy'] == True) & (df[CONDITION]==True)
+            
+    print(len(df[df['buy']==True]))
+    if STOCH == True:
+        df[['fast_sto','slow_sto']]  = pta.stoch(df.high,df.low,df.close)
+        df['buy']                    = (df['buy']==True) & ( df['fast_sto']<STOCH_THRESH)
+    
+    if plot  == True:
+        if CONDITION != None:
+            jenay(df,scale_one = CONDITION,scale_two='buy')
+        else:
+            jenay(df,scale_two='buy')
+            
+    
