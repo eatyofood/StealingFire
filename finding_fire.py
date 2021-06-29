@@ -552,24 +552,95 @@ def short_frame(df,plot=False):
     
 
 
-import plotly.graph_objects as go
+def numdex(df):
+    '''
+    turns your dataframe's datetime index into an ordered numeric index
+    with labeled dates.
+    
+    TAKES:
+        DataFrame: with datetime index
+    OUTPUT:
+        DataFrame: now with string index (in order) with datetime as labels.
+        
+    
+    '''
+    #number of digits
+    max_digs = len(str(len(df)))
+    #copy of dataframe to reset index
+    dfc = df.copy().reset_index()
 
-def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',scale_two=''):
+
+    print('max digits:',max_digs)
+
+    # copy index
+    dfc['index_copy'] = dfc.index
+    dfc['time']       = df.index
+    # lose noice
+    dfc = dfc[['time','index_copy']]
+    # String Index Copy
+    dfc['string_index'] = dfc['index_copy'].astype(str)
+
+    dfc['num_of_digs'] = True
+    dfc['string_stack']= 0
+    dfc['dig_diff']    = 0
+    dfc['we_short']    = False
+    num_li             = []
+    dfc['new_index']   =  0
+    for i in range(len(dfc)):
+        # Length Of Digits
+        dig_len = len(dfc['string_index'][i])
+        # Current Index Number 
+        cur_num = dfc['string_index'][i]
+        # Digit Difference
+        dig_diff= max_digs - dig_len
+        ### TEMP
+        dfc['dig_diff'][i] = dig_diff
+        ###
+        if dig_diff > 0:
+            ### TEMP
+            dfc['we_short'][i] = True
+            ### 
+            for i in range(dig_diff):
+                cur_num = '0' + cur_num 
+
+        num_li.append(cur_num)
+
+
+
+
+
+    dfc['new_index'] = num_li 
+    dfc['new_index'] = dfc['new_index'].astype(str) + '|||' + dfc['time'].astype(str)
+    dfc
+    df.index = dfc['new_index']
+    return df
+        
+import plotly.graph_objs as go
+import plotly.offline    as pyo
+
+def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,scale_one='',scale_two='',numidex=False):
 
     '''
     ploting and scaling all in one
     TAKES:
-        1.df
-        2.fast and slow ma
-        3.line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
-        4.scale_one - takes bool and make true close for visual guid on signals
+        1. df
+        2. fast and slow ma
+        3. line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
+        4. line_list : plots a list of column names into line traces 
+        5. scale_one - takes bool and make true close for visual guid on signals
+        6. numindex : turns a time series index into a string index ( while staying in order
+                        and displaying date) . this makes some time series plots easier to read, when 
+                        there are gaps in intraday or weekend data
 
 
 
     scale_one and scale_two
     
     '''
-
+    if numidex == True:
+        df = numdex(df)
+    
+    
     # name the avgs
     fname = 'ma_'+str(fast)
     sname = 'ma_'+str(slow)
@@ -653,61 +724,23 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',scale_one='',sca
             )
         )
     )
+    
+    
+    # Add Lines From A List
+    if line_list != None:
+        for line in line_list:
+            
+            fig.add_trace(go.Scatter(x=df.index, y=df[line],
+                mode='lines',
+                name=line,
+                opacity=0.60
+                                    ))
+    
     fig.update_layout(layout,template='plotly_dark',title=title)#template="plotly_dark",title='Candle')
     fig.show(theme='solar',yaxis = dict(fixedrange = False))
 
     
 
-
-
-       #buy strace
-
-    '''fig.add_trace(go.Scatter(x=df.index, y=df['val'],
-                            mode='lines',name='Validation',
-                             line=dict(color='lightskyblue',
-                                      )
-                            ))
-    #                    mode='markers',
-    #                    name='markers'))
-'''
-'''
-    SO THESE ARE NEAT AND TIDY 
-
-
-    fig.add_trace(go.Scatter(x=df.index, y=df['buyscale'],
-                        mode='markers',
-                        name='BUY',
-                            marker=dict(
-                            color='seagreen',
-                            size=8
-                            )
-                            ))
-
-
-
-
-    fig.add_trace(go.Scatter(x=df.index, y=df['sellscale'],
-                        mode='markers',
-                        name='SELL',
-                                     marker=dict(
-                                     color='#d62728',
-                                     size=8,)
-
-
-                            ))
-
-
-#FILL TRACE
-
-    fig.add_trace(go.Scatter(x=df.index, y=df['tracscale'],
-
-    mode='lines',
-    name='BUY',
-    opacity=0.09,
-    fill='tozeroy',
-                            line=dict(color='lightgreen')))
-
-''' 
 
 
 import numpy as np
@@ -1584,7 +1617,7 @@ def save_database(df,table_name,database='twitter',merge_with_old=True,add_new_c
     con      = eng.connect()
     tables   = eng.table_names()
     table_df = pd.DataFrame(tables,columns=['tables'])
-    print(table_df)
+    #print(table_df)
 
     if (table_name in list(tables)) and (merge_with_old == True):
     #Load Data From The Base
@@ -1633,7 +1666,7 @@ def pull_database( database,table_name=None):
     con      = eng.connect()
     tables   = eng.table_names()
     table_df = pd.DataFrame(tables,columns=['tables'])
-    print(table_df)
+    #print(table_df)
     if table_name == None:
         con.close()
         return table_df # this was tables i hope i didnt just break it...
@@ -1663,4 +1696,14 @@ def get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00'):
         seconds = 900
 
     df = HistoricalData(coin,granularity=seconds ,start_date=start_date).retrieve_data()
+    return df
+
+def plot_n_scrape(ticker,time_frame='1hr'):
+    '''
+    the new and improved plot n scrape...
+    '''
+    
+    df    = get_some(ticker)
+    sheet = ticker + '_' + time_frame
+    jenay(df,title=sheet,)
     return df
