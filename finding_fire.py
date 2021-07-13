@@ -1,3 +1,4 @@
+from Scrape import get_some
 import pandas as pd
 from tqdm import trange
 import talib
@@ -639,11 +640,12 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,s
     '''
     if numidex == True:
         df = numdex(df)
-    
+    df  = df.rename(columns={'Close':'close'})
     
     # name the avgs
     fname = 'ma_'+str(fast)
     sname = 'ma_'+str(slow)
+
 
     #create avgs
     df[fname] = df['close'].rolling(fast).mean().shift()
@@ -1675,35 +1677,35 @@ def pull_database( database,table_name=None):
             #Load Data From The Base
             a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng)
             return a 
-ticker = 'ETH'
-time_frame = '1d'
-start_date = '2020-03-01-00-00'
 
 
-cryptos = ['ELGD','BTC','ORN','ETH']
-#if ticker in cryptos:
-from Historic_Crypto import HistoricalData 
-
-def get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00'):
-    coin = ticker.upper() + '-USD'
-    print(coin)
-    #timeframes
-    if time_frame == '1d':
-        seconds = 86400
-    if time_frame == '1hr':
-        seconds = 3600
-    if time_frame == '15min':
-        seconds = 900
-
-    df = HistoricalData(coin,granularity=seconds ,start_date=start_date).retrieve_data()
-    return df
-
-def plot_n_scrape(ticker,time_frame='1hr'):
+def plot_n_scrape(ticker,time_frame='1hr',numidex=False,title=None,lineli=None,mask=None):
     '''
+    scrapes a stock ticker , plots it and returns a dataframe as well as 
+    updateing the 'stock' database
+    TAKES:
+        1.ticker : str
+        2.time_frame : str
+            a) '15min'
+            b) '1hr'
+            c) '1d'
+        3. numidex : bool (replaces timeseries index with timeseries labeled string index 
+                to eliminate gaps in the plot. ( gapless plots for intraday) )
+        4. title : str . 
+    
     the new and improved plot n scrape...
     '''
     
-    df    = get_some(ticker)
-    sheet = ticker + '_' + time_frame
-    jenay(df,title=sheet,)
+    # Scrape The Data From Different Sources Depending On What Time Frame
+    df    = get_some(ticker,time_frame=time_frame)
+    # Mask Data If Specified
+    if mask != None:
+        df = df[df.index>mask]
+    # Name The Sheet With Ticker And Time Frame
+    if title == None:
+        title = ticker.upper() + '_' + time_frame
+
+    # Box Chart Planning Function
+    jenay(df,title=title,numidex=numidex,line_list=lineli)
+    
     return df

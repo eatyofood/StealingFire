@@ -119,12 +119,16 @@ def back_burner_buysignal(buy,RSI_THRESH=40):
         jenay(df,scale_one='waiting',scale_two='first_oversold')
 
 
-def falcon_backtest(df,mydic,research_project=None):
+def falcon_backtest(df,mydic,sheet,results=None,research_project=None,plot=True):
     '''
     TAKES: 
         1) price dataframe with buy signals 
         2) paramater_dictionary
-        3) and research_project name (optional)
+        3) sheet : for spreadsheet but really just a refrence to what_data for saving results...
+        4) results : is a list for combing results
+        5) research_project : name (optional) will save a database table for that specific project.
+            todo: thats unnessisarty , just make a column for it!!! and a function to extract it!
+        6) plot : 
     RETURNS:
         1) backtest results in the form of oa dataframe. 
         2) appends the data to the research dump database table
@@ -153,7 +157,11 @@ def falcon_backtest(df,mydic,research_project=None):
         result['end_date']     = df.index[-1]
         if '.csv' in sheet:
             result['security'] = sheet.split(' ')[1]
-        results.append(result)
+        else:
+            result['security'] = sheet.split('_')[0]
+        
+        if results !=None:
+            results.append(result)
         
         '''
         DATABASE ZONE:
@@ -162,11 +170,14 @@ def falcon_backtest(df,mydic,research_project=None):
             
             SIDENOTE: IF THIS SLOWS BACKTEST'S DOWN TO MUCH 
                 GOBACK, to doing them in bundles...
-        '''
-        push_database(result,'ResearchDump','research',save_index=True,drop_duplicates=True,time_series=False)#,index_name='strat_name')
+        
         if research_project != None:
+
+            result['research_project'] = research_project
             push_database(result,research_project,'research',save_index=True,drop_duplicates=True,time_series=False)#,index_name='strat_name')
 
+        push_database(result,'ResearchDump','research',save_index=True,drop_duplicates=True,time_series=False)#,index_name='strat_name')
+        '''
         return result
         
         
@@ -663,8 +674,8 @@ def twit_grid(df,username):
     con = eng.connect()
     table_name = username + '_grid'
     tables = eng.table_names()
-    print(tables)
-    print(table_name)
+    #print(tables)
+    #print(table_name)
 
     if table_name in tables:
         #Load Data From The Base

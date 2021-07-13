@@ -1,7 +1,13 @@
-from track_sectors import plot_n_scrape
+'''
+------------------ all of this is going into stealing fire ---------------------------------
+'''
+
+
+
+#from track_sectors import plot_n_scrape
 import pandas as pd
 import os
-from finding_fire import jenay
+#from finding_fire import jenay
 import sqlalchemy as sql
 import time
 import cufflinks as cf 
@@ -69,19 +75,29 @@ def get_some(ticker,time_frame='1hr'):
         b) 1hr
         c) 1d
     '''
+    #standardize time frame 
+    time_frame = time_frame.lower()
+    ticker     = ticker.upper()
     cryptos = ['EGLD','BTC','ORN','ETH','CEL']
     if ticker in cryptos:
         print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
         df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
         
-
+    # NOW========= going to use fin-mod-prep for dialy download
     elif time_frame == '1d':
-        df = dnld_daily(ticker)
-        # standardize
-        df.index.name = 'date'
+        
+        dtype = 'historical-price-full'
+        #ticker= 'TSLA'
+
+        # set endpoint & get json
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        data = get_jsonparsed_data(url)
+
+        df   = pd.DataFrame(data['historical']).sort_values('date').set_index('date')
+        df
+
     
     else:
-
 
         if time_frame == '1hr':
             dtype = 'historical-chart/1hour'
@@ -91,8 +107,9 @@ def get_some(ticker,time_frame='1hr'):
             dtype = 'historical-chart/15min'
 
 
-        url = ("https://financialmodelingprep.com/api/v3/{}/{}?apikey=26815f601e2c459e55a4510a897ea5dd").format(dtype,ticker)
+        url = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
         data = get_jsonparsed_data(url)
+        print(data)
         df = pd.DataFrame(data)
         if 'date' in df.columns:
             df = df.set_index('date')
@@ -272,7 +289,7 @@ def extract_tickers(s):
         #print('RESULT:',result, 'WORD:',w)
         
         
-        if len(w) == len(result):
+        if (len(w) == len(result)) & (len(w)>0):
             #print('====GOOD====',w)
             
             goodli.append(re.sub(r'\d+', '', w.replace('$','')))
@@ -336,13 +353,15 @@ def twit_grid(df,username):
 
     if table_name in tables:
         #Load Data From The Base
-        a=pd.read_sql_query('select * from {}'.format(table_name),con=eng).set_index('Datetime')
+        a=pd.read_sql_query('select * from "{}"'.format(table_name),con=eng).set_index('Datetime')
 
         # Add Columns If Not In Database
         left_overs = set(df.columns) - set(a.columns)
+        left_overs = [col for col in left_overs if len(col)> 0]
         print('columns in Database:',len(left_overs),left_overs)
         if len(left_overs) > 0:
             for col in left_overs:
+                
                 con.execute('ALTER TABLE {} ADD COLUMN "{}" TEXT NULL;'.format(table_name,col))
 
 
@@ -419,9 +438,118 @@ def twitter(username,count):
     print('IT WORKED')
     
     # if returned tweets dont have any ticker symbols dont try to make a grid 
-    try:
-        grid = twit_grid(df,username)
-    except:
-        grid = None
+    #try:
+    grid = twit_grid(df,username)
+    #except:
+    #    grid = None
         
     return df,grid
+
+
+
+tweets = []
+
+def text_query_to_csv(text_query,count):
+
+    '''
+    SCRAPE TWITTER BASED ON TEXT / HASH TAG
+    '''
+
+    #try:
+    # Creation of query method using parameters
+    tweets = tweepy.Cursor(api.search,q=text_query).items(count)
+
+    # Pulling information from tweets iterable object
+    tweets_list = [[tweet.created_at, tweet.id, tweet.text,tweet.retweet_count,tweet.favorited,tweet.author.followers,tweet.user] for tweet in tweets]
+
+    # Creation of dataframe from tweets list
+    # Add or remove columns as you remove tweet information
+    tweets_df = pd.DataFrame(tweets_list,columns=['Datetime', 'Tweet Id', 'Text','retweet_count','favorited','followers','user'])
+
+    # Converting dataframe to CSV 
+    tweets_df.to_csv('{}-tweets.csv'.format(text_query), sep=',', index = False)
+    return tweets_df
+
+
+
+def twitter_hashtag(text,count,plot=True):
+    '''
+    returns rates of tweets and retweet rates. 
+    saves an archive of that ino
+    the actual tweet dataframe is saved in the retweet_df column. ( if its not being retweeted its not worth it)
+    returns the info df
+    '''
+    # tweepy function
+    df = text_query_to_csv(text,count)
+
+    # Fix  Index and Run Calculations
+
+    df = df.set_index('Datetime')
+    df.index = df.index - pd.Timedelta(hours=4)
+
+    # aggrigating usefull data to archive for backtest's
+    tweet_retweeted = len(df[df['retweet_count']>0])
+    retweet_df      = df[df['retweet_count']>0]
+    fav_len         = len(df[df['favorited']==True])
+    retweet_sum = retweet_df['retweet_count'].sum()
+    fav_len         = len(df[df['favorited']==True])
+    start_time      = df.index[0]
+    last_time       = df.index[-1]
+    time_delta      = start_time - last_time
+    rate_multiple   = pd.Timedelta(hours=1)/time_delta
+    tweets_per_hour = 400 * rate_multiple
+
+
+    # Save To a Dictionary
+
+    di = {}
+    di['fav_len']        = fav_len
+    di['start_time']     = start_time
+    di['last_time']      = last_time
+    di['time_delta']     = time_delta
+    di['rate_multiple']  = rate_multiple
+    di['tweets_per_hour']= tweets_per_hour
+    di['tweet_retweeted'] = tweet_retweeted
+    di['retweet_df']      = retweet_df
+    di['fav_len']         = fav_len
+    di['retweet_sum']     = retweet_sum
+    # tweet info df
+    tidf = pd.DataFrame([di])
+    tidf['tweets_per_second'] = (tidf['tweets_per_hour']/60)/60
+    tidf
+
+    text
+    
+    # append archive or create it if not exists
+    apath = text+'_tweetArchive.csv'
+    if not os.path.exists(apath):
+        tidf.to_csv(apath,index=False)
+        print('doesnt exist: createing sheet')
+    else:
+        oldf = pd.read_csv(apath)
+        ndf  = oldf.append(tidf)
+        ndf.to_csv(apath,index=False)
+        print('it exists: appending it')
+
+
+
+    print('tweets_per_hour:',tweets_per_hour)
+
+    # Data Log
+    ndf
+
+    #making the index the last recorded data
+    ndf = ndf.set_index('last_time')
+    ndf
+
+    # Plots
+
+
+    if plot == True:
+        from finding_fire import sola,sobar
+
+        sola(ndf[['rate_multiple','tweet_retweeted']],title='Retweets And RateMultiple')
+
+        sola(ndf['tweets_per_hour'],title='Tweets Per Hour')
+        
+    return ndf
