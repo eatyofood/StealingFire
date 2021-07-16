@@ -83,7 +83,7 @@ def get_some(ticker,time_frame='1hr'):
         print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
         df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
         
-    # NOW========= going to use fin-mod-prep for dialy download
+    #download daily data --- it has to parsed diffrently b/c you are recievie data in a dictionary
     elif time_frame == '1d':
         
         dtype = 'historical-price-full'
@@ -98,18 +98,15 @@ def get_some(ticker,time_frame='1hr'):
 
     
     else:
-
+        # download hourly data
         if time_frame == '1hr':
             dtype = 'historical-chart/1hour'
 
-
+        # down load 15minute data
         if time_frame == '15min':
             dtype = 'historical-chart/15min'
 
 
-        url = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
-        data = get_jsonparsed_data(url)
-        print(data)
         df = pd.DataFrame(data)
         if 'date' in df.columns:
             df = df.set_index('date')
