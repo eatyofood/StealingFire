@@ -106,6 +106,8 @@ def get_some(ticker,time_frame='1hr'):
         if time_frame == '15min':
             dtype = 'historical-chart/15min'
 
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        data = get_jsonparsed_data(url)
 
         df = pd.DataFrame(data)
         if 'date' in df.columns:
