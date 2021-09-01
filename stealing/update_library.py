@@ -57,6 +57,7 @@ say('files moved to template')
 say('cloud backup directory')
 print('GIT DIRECTORY')
 print('/home/brando/algos/Templates/StealingFire') 
-
+import config
+print('git access token:\n',config.git_access_token)
 say('update the log:')
 os.system('libreoffice /home/brando/algos/project_diary.ods')
