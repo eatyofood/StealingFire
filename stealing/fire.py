@@ -1552,13 +1552,7 @@ def say(words):
     engine.say(words)
     engine.runAndWait()
 
-def show_tweets(TICKER):
-    indi = []
-    for i in range(len(tdf)):
-        for t in tdf['hash'][i]:
-            if t == TICKER.upper():
-                indi.append(tdf.index[i])
-    return tdf.T[indi].T
+
 
 def is_algo_active_checker(df,algo_name,table_name):
     '''
@@ -1724,14 +1718,42 @@ def get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00'):
     df = HistoricalData(coin,granularity=seconds ,start_date=start_date).retrieve_data()
     return df
 
-def plot_n_scrape(ticker,time_frame='1hr'):
+def plot_n_scrape(ticker,time_frame='1hr',numidex=False,title=None,lineli=[],mask=None,h_line=None):
     '''
+    scrapes a stock ticker , plots it and returns a dataframe as well as 
+    updateing the 'stock' database
+    TAKES:
+        1.ticker : str
+        2.time_frame : str
+            a) '15min'
+            b) '1hr'
+            c) '1d'
+        3. numidex : bool (replaces timeseries index with timeseries labeled string index 
+                to eliminate gaps in the plot. ( gapless plots for intraday) )
+        4. title : str . 
+        5. h_line : int : this is just a horizontal line
+    TODO: 
+        - MAKE IT UPDATE DATABASE 
+        - MAKE IS PULL FROM DATEBASE
+        - MAKE IT INTEGRATE TWEETS OR OTHER EVENTS AUTOMATIACALLY 
     the new and improved plot n scrape...
     '''
     
-    df    = get_some(ticker)
-    sheet = ticker + '_' + time_frame
-    jenay(df,title=sheet,)
+    # Scrape The Data From Different Sources Depending On What Time Frame
+    df    = get_some(ticker,time_frame=time_frame)
+    # Mask Data If Specified
+    #if mask != None:
+    #    df = df[df.index>mask]
+    # Name The Sheet With Ticker And Time Frame
+    if title == None:
+        title = ticker.upper() + '_' + time_frame
+    if h_line != None:
+        df['h_line'] = h_line
+        lineli = ['h_line']
+        
+    # Box Chart Planning Function
+    jenay(df,title=title,numidex=numidex,line_list=lineli)
+    
     return df
 
 
@@ -1857,9 +1879,9 @@ def falcon_backtest(df,mydic,research_project=None):
                   plot=plot,
                   plot_capital=plot)
         # Add Conditions & Params to Results Data
-        for i in mydic.keys():
-            if mydic[i] != None:
-                result[i] = mydic[i]
+        #for i in mydic.keys():
+        #    if mydic[i] != None:
+        #        result[i] = mydic[i]
         result['target_type'] = 'one_stop' 
         #Fast Quant Your Face
         try:
@@ -2063,7 +2085,6 @@ def dnld_daily(ticker):
     #print(df)
     return df
 
-
 def get_some(ticker,time_frame='1hr'):
     '''
     time_frame(s): str
@@ -2073,23 +2094,38 @@ def get_some(ticker,time_frame='1hr'):
     '''
     #standardize time frame 
     time_frame = time_frame.lower()
+    ticker     = ticker.upper()
     cryptos = ['EGLD','BTC','ORN','ETH','CEL']
     if ticker in cryptos:
         print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
         df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
+        
+    #download daily data --- it has to parsed diffrently b/c you are recievie data in a dictionary
     elif time_frame == '1d':
-        df = dnld_daily(ticker)
-        # standardize
-        df.index.name = 'date'
+        
+        dtype = 'historical-price-full'
+        #ticker= 'TSLA'
+
+        # set endpoint & get json
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        data = get_jsonparsed_data(url)
+
+        df   = pd.DataFrame(data['historical']).sort_values('date').set_index('date')
+        df
+
+    
     else:
+        # download hourly data
         if time_frame == '1hr':
             dtype = 'historical-chart/1hour'
 
+        # down load 15minute data
         if time_frame == '15min':
             dtype = 'historical-chart/15min'
 
-        url = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
         data = get_jsonparsed_data(url)
+
         df = pd.DataFrame(data)
         if 'date' in df.columns:
             df = df.set_index('date')
@@ -2098,6 +2134,7 @@ def get_some(ticker,time_frame='1hr'):
 
             df = df.sort_values('date')
     return df 
+
 
 
 
@@ -2179,13 +2216,6 @@ def say(words):
     engine.say(words)
     engine.runAndWait()
 
-def show_tweets(TICKER):
-    indi = []
-    for i in range(len(tdf)):
-        for t in tdf['hash'][i]:
-            if t == TICKER.upper():
-                indi.append(tdf.index[i])
-    return tdf.T[indi].T
 
 def merge_tweets_with_price(ticker,plot=True):
     '''
@@ -3773,4 +3803,24 @@ def candle_buysignals(df,CANDLE,UP_PCT=20,DN_PCT=10,plot=False,CONDITION=None,ST
         else:
             jenay(df,scale_two='buy')
             
+
+
+
+def show_tweets(TICKER,rm_rt=False):
+    indi = []
+    for i in range(len(tdf)):
+        for t in tdf['hash'][i]:
+            if t == TICKER.upper():
+                
+                indi.append(tdf.index[i])
+    # Define Isolated Data Frame
+    stdf = tdf.T[indi].T
     
+    if (rm_rt == True) & ( len(stdf) > 0 ):
+        badli = []
+        for i in trange(len(stdf)):
+            
+            if "RT" in stdf['Text'][i].upper() :
+                print(f'retweet in: {stdf.index[i]}')
+                badli.append(stdf.index[i])
+        stdf = stdf.drop(badli,axis=0)

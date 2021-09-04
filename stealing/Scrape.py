@@ -69,30 +69,40 @@ def get_some(ticker,time_frame='1hr'):
         b) 1hr
         c) 1d
     '''
+    #standardize time frame 
+    time_frame = time_frame.lower()
+    ticker     = ticker.upper()
     cryptos = ['EGLD','BTC','ORN','ETH','CEL']
     if ticker in cryptos:
         print('[[[[[[[[[[[[[[[[[[[[[[[[CRYPTO {}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'.format(ticker))
         df = get_crypto(ticker,time_frame,start_date = '2020-03-01-00-00')
         
-
+    #download daily data --- it has to parsed diffrently b/c you are recievie data in a dictionary
     elif time_frame == '1d':
-        df = dnld_daily(ticker)
-        # standardize
-        df.index.name = 'date'
+        
+        dtype = 'historical-price-full'
+        #ticker= 'TSLA'
+
+        # set endpoint & get json
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
+        data = get_jsonparsed_data(url)
+
+        df   = pd.DataFrame(data['historical']).sort_values('date').set_index('date')
+        df
+
     
     else:
-
-
+        # download hourly data
         if time_frame == '1hr':
             dtype = 'historical-chart/1hour'
 
-
+        # down load 15minute data
         if time_frame == '15min':
             dtype = 'historical-chart/15min'
 
-
-        url = ("https://financialmodelingprep.com/api/v3/{}/{}?apikey=26815f601e2c459e55a4510a897ea5dd").format(dtype,ticker)
+        url  = (f"https://financialmodelingprep.com/api/v3/{dtype}/{ticker}?apikey={config.fin_mod_api}")
         data = get_jsonparsed_data(url)
+
         df = pd.DataFrame(data)
         if 'date' in df.columns:
             df = df.set_index('date')

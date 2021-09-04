@@ -17,10 +17,14 @@ import pandas as pd
 
 
 #database_function - V3.1
-def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost/'):
+def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost/',unique_index=True):
+    '''
+    unique_rose is the name of the index you want to be unique. 
+    
+    '''
     eng = sql.create_engine(addr+db)
     con = eng.connect()
-    print(df)
+    
     tables = eng.table_names()
     if table_name in tables:
         print('yeap table already exists...')
@@ -31,7 +35,7 @@ def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost
             a = a.set_index(df.index.name)
         except Exception as e:
             print('could not set index for some reason:',e)
-        print(a)
+        #print(a)
         
         #if you have issues here add an if statment to the set index thing. 
         missing_columns = [col for col in df.columns if col not in a.columns]
@@ -41,7 +45,24 @@ def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost
             for col in missing_columns:
                 print('attempting to add:',col)
                 con.execute(f'ALTER TABLE {table_name} ADD COLUMN {col} TEXT NULL;')#.format(table_name,col))
-                
+        # NON DUPLICATE LOGIC HERE 
+        
+        if unique_index == True:
+            index_list = []
+            for i in range(len(df)):
+                index = df.index[i]
+                if index not in a.index:
+                    index_list.append(index)
+            print('the list of rows to update is:',len(index_list))
+            df = df.T[index_list].T 
+
+
+
+
+
+
+
+
     df.to_sql(table_name,con,if_exists='append')
     con.close()
     
@@ -63,7 +84,7 @@ def from_db(table_name,db_name,index_name=None):
         con = eng.connect()
         tables = eng.table_names()
         print('connected to local database')
-        
+
     print(tables)
     if table_name in tables:
         #Load Data From The Base
@@ -72,3 +93,47 @@ def from_db(table_name,db_name,index_name=None):
             if index_name in a.columns:
                 a = a.set_index(index_name)
     return a
+
+
+def parse_nested_dic(d,return_dataframe=True):
+    done = False
+    new_dic = {}
+    while done != True:
+        d_len = len(d.keys())
+        cnt   = 0
+        li    = []
+        drop_key = []
+        for key in d.keys():
+            if key not in drop_key:
+                print(key)
+                # try
+
+                try:
+
+                    sub_d = d[key]
+                    for sub_key in sub_d.keys():
+
+                        new_key = key +':'+ sub_key
+                        new_dic[new_key] = sub_d[sub_key]
+
+                        print('new key:',new_key)
+                    drop_key.append(key)
+                    li.append(new_dic)
+                    d_len = d_len -1
+                    #d.pop(key,None)
+                except:
+                    cnt += 1
+            print('COUNT:',cnt)
+            print('KEYS :',d_len)
+
+
+        done = True
+
+
+    for key in drop_key:
+        d.pop(key,None)
+    d = {**d,**new_dic}
+    if return_dataframe == True:
+        return pd.DataFrame([d])
+    else:
+        return d
