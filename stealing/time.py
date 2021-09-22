@@ -44,7 +44,7 @@ def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost
         if len(missing_columns) > 0:
             for col in missing_columns:
                 print('attempting to add:',col)
-                con.execute(f'ALTER TABLE {table_name} ADD COLUMN {col} TEXT NULL;')#.format(table_name,col))
+                con.execute(f'ALTER TABLE "{table_name}" ADD COLUMN "{col}" TEXT NULL;')#.format(table_name,col))
         # NON DUPLICATE LOGIC HERE 
         
         if unique_index == True:
@@ -81,14 +81,20 @@ def from_db(table_name,db_name,index_name=None):
         eng = sql.create_engine(f'postgresql://postgres:password@localhost/{db_name}')
 
         # List tables 
-        con = eng.connect()
+        con    = eng.connect()
         tables = eng.table_names()
         print('connected to local database')
 
-    print(tables)
+    #print(tables)
     if table_name in tables:
-        #Load Data From The Base
-        a=pd.read_sql_query(f'select * from {table_name}',con=eng)#.set_index('date')
+        #Load Data From The Base 
+        try:
+            a=pd.read_sql_query(f'select * from "{table_name}"',con=eng)#.set_index('date')
+            print('loaded data with quotes in the name')
+        except:
+            print('could not load that table with query in qotes,\n trying without')
+            a=pd.read_sql_query(f'select * from {table_name}',con=eng)
+
         if index_name != None:
             if index_name in a.columns:
                 a = a.set_index(index_name)
@@ -137,3 +143,57 @@ def parse_nested_dic(d,return_dataframe=True):
         return pd.DataFrame([d])
     else:
         return d
+
+def show_tables(db_name,as_dataframe=False):
+    try:
+        eng = sql.create_engine(db_name)
+        # List tables 
+        con = eng.connect()
+        tables = eng.table_names()
+        print('CONNECTED: TO CLOUD')
+    except:
+        eng = sql.create_engine(f'postgresql://postgres:password@localhost/{db_name}')
+
+        # List tables 
+        con = eng.connect()
+        tables = eng.table_names()
+        print('connected to local database')
+        
+    if as_dataframe == True:
+        
+        tables = pd.DataFrame(tables,columns=[db_name])
+    return tables
+    
+
+    #print(tables)
+
+def move_data():
+    '''
+    moves the trading view data from downloads folder and uploads it into the backtest database
+    NOTE: if you wanted to upload to ao diff database just make the database into a variable & make the load datafunction an option...
+    '''
+    # Download Path & make the file list
+    path = '/home/brando/Downloads/'
+    file_list = os.listdir(path)
+    file_list = [f for f in file_list if '.csv' in f]
+    file_list
+
+
+    # loop through data in downloads
+    for i in range(len(file_list)):
+        try:
+            # path to the file your trying to upload to the database
+            f_path = path + file_list[i]
+
+
+            # name the table based on the file name
+            table_name = file_list[i].replace('.csv','')
+            db = 'backtest_data'
+            # upload the spreadsheet using the protocal
+            dnld_df = load_data(f_path)
+            # upload to the database
+            to_db(dnld_df,table_name,db)
+            # remove the csv
+            os.remove(f_path) 
+        except:
+            print('could not upload:',table_name)

@@ -28,7 +28,16 @@ import pandas as pd
 from tqdm import trange
 import talib
 import pandas_ta as pta
-import os
+import os 
+
+def scale_to_close(df,col):
+    new_col = col + '_scaled'
+    df[new_col] = 0
+    for i in range(len(df)):
+        if df[col][i] == True:
+            df[new_col][i] = df['close'][i]
+    return df
+
       
 def hl(df):
     def highlight(boo):
@@ -118,18 +127,19 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
             dn[i] = dn[i-1]
             trac[i] = trac[i-1]
             ent[i]  = ent[i-1]
-    df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
+    #df['ENTRY_scale']= df['ENTRY'].replace(True,1).replace(1,df.close)
+    df = scale_to_close(df,'ENTRY')
     #need a candelstick PLT SUCKA!!!
     if plot == True:
-        df['trac_scale'] = df['trac'].replace(True,1).replace(1,df.close) 
-        df['TARG_scale'] = df['TARG'].replace(True,1).replace(1,df.close)
-        df['STOP_scale'] = df['STOP'].replace(True,1).replace(1,df.close)
-        df['OUT_scale']  = df['OUT'].replace(True,1).replace(1,df.close)
-        
-        df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
+        df = scale_to_close(df,'trac')
+        df = scale_to_close(df,'TARG')
+        df = scale_to_close(df,'STOP')
+        df = scale_to_close(df,'OUT')
 
+        #df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
+        df = scale_to_close(df,'EXIT')
 
-        df[['trac_scale','close','TARG_scale','STOP_scale','ENTRY_scale','OUT_scale','EXIT_scale']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
+        df[['trac_scaled','close','TARG_scaled','STOP_scaled','ENTRY_scaled','OUT_scaled','EXIT_scaled']].iplot(theme='solar',fill=True,title=(strat_name+' Target - plot'))
 
     #grab the first buy to scale price
     first_buy = df[df[BUY]==True].close.iloc[0]
@@ -158,7 +168,7 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
             scale[i] = scale[i-1]
     #plot_capital = True
     if plot_capital == True:
-        df[['ENTRY_scale','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
+        df[['ENTRY_scaled','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
 
 
 
@@ -644,6 +654,7 @@ def numdex(df):
 import plotly.graph_objs as go
 import plotly.offline    as pyo
 
+
 def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,scale_one='',scale_two='',numidex=False):
 
     '''
@@ -711,8 +722,11 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,s
         line=dict(color='lightgreen')))
     
     if len(scale_one) > 0: 
-        scale_name = scale_one + '_scale'
-        df[scale_name] = df[scale_one].replace(True,1).replace(1,df.close)
+        
+        ## this is the pandas update issue
+        df = scale_to_close(df,scale_one)
+        scale_name = scale_one + '_scaled'
+
         fig.add_trace(go.Scatter(x=df.index, y=df[scale_name],
             mode='lines',
             name=scale_one,
@@ -722,8 +736,9 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,s
 
     
     if len(scale_two) > 0: 
-        scale_name_two = scale_two + '_scale'
-        df[scale_name_two] = df[scale_two].replace(True,1).replace(1,df.close)
+        df = scale_to_close(df,scale_two)
+        scale_name_two = scale_two + '_scaled'
+        
         fig.add_trace(go.Scatter(x=df.index, y=df[scale_name_two],
             mode='lines',
             name=scale_two,
@@ -3824,3 +3839,72 @@ def show_tweets(TICKER,rm_rt=False):
                 print(f'retweet in: {stdf.index[i]}')
                 badli.append(stdf.index[i])
         stdf = stdf.drop(badli,axis=0)
+
+def mix_twitter_data_with_price(df,ttdf,tic):
+    '''
+    mixes price (df) with top tweets (ttdf) on the mentioned (tic)
+    returns a mixed dataframe
+    '''
+    # create placeholder columns
+    df['twitter_mention'] = False
+    df['rolling_total']   = 0
+    df['new_king']        = False 
+    df['mentioned_before']= False 
+    df['mention_date']    = ''
+    df
+
+    tweet_df = ttdf[ttdf['top_ticker']==tic]
+    tweet_df
+
+
+    # get the previouse date and the next date
+    df['date'] = df.index.date
+
+    df['last_date'] = df.index.date[0]
+    for i in range(1,len(df)):
+        if df['date'][i] != df['date'][i-1]:
+            df['last_date'][i] = df['date'][i-1]
+        else:
+            df['last_date'][i] = df['last_date'][i-1]
+        
+
+    df = df[::-1]
+    df['next_date'] = df.index.date[0]
+    for i in range(1,len(df)):
+        if df['date'][i] != df['date'][i-1]:
+            df['next_date'][i] = df['date'][i-1]
+        else:
+            df['next_date'][i] = df['next_date'][i-1]
+        
+
+    df = df[::-1]
+
+
+    
+    print('mixing price and twitter data for:',tic)
+
+    for i in trange(len(tweet_df)):
+        mention_date  = tweet_df.index[i]
+        rolling_total = tweet_df['rolling_total'][i]
+        new_king      = tweet_df['new_king'][i] 
+
+        # isolate and adjust the row thats relevant
+
+        for row in range(1,len(df)-1): 
+            if (df['last_date'][row] < mention_date) & ( df['next_date'][row] >mention_date):
+                #print('got it at',df.index[row])
+                df['twitter_mention'][row] = True
+                df['rolling_total'][row]   = rolling_total 
+                df['new_king'][row]        = new_king
+                df['mention_date'][row]    = str(mention_date) 
+
+    ## now you need mark the first mention
+
+    # grab the first mentiondate
+    index_mask = df[df['twitter_mention']==True].index[0]
+
+    # loop to determain if each row is before or after first mention
+    for row in range(len(df)):
+        if df.index[row] > index_mask:
+            df['mentioned_before'][row] = True
+    return df
