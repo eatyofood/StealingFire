@@ -9,21 +9,37 @@ def say(thing):
     print('---------------------------------------------')
     eng.say(thing)
     eng.runAndWait()
-say('good morning brandon ')
+#say('good morning brandon ')
 
 
 import sqlalchemy as sql
 import pandas as pd
 
 
-#database_function - V3.1
+#database_function - V3.2
 def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost/',unique_index=True):
     '''
     unique_rose is the name of the index you want to be unique. 
-    
+    database_function - V3.2
     '''
-    eng = sql.create_engine(addr+db)
-    con = eng.connect()
+
+    try:
+        eng = sql.create_engine(db)
+
+        # List tables 
+        con = eng.connect()
+        tables = eng.table_names()
+        print('CONNECTED: TO CLOUD')
+    except:
+        eng = sql.create_engine(f'postgresql://postgres:password@localhost/{db}')
+
+        # List tables 
+        con    = eng.connect()
+        tables = eng.table_names()
+        print('connected to local database')
+
+    #eng = sql.create_engine(addr+db)
+    #con = eng.connect()
     
     tables = eng.table_names()
     if table_name in tables:

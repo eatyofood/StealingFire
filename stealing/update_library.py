@@ -18,6 +18,20 @@ def say(thing):
     print('---------------------------------------------')
     eng.say(thing)
     eng.runAndWait()
+
+def move_file(old,new):
+    '''
+    tries to copy a file, and if it exists then it will delete the old one 
+    '''
+    try: 
+        copyfile(old,new)
+    except:
+        try:
+            os.remove(old)
+            os.replace(old,new)
+        except BaseException as b:
+            print(b)
+
 say('good morning brandon ')
 
 say("let me know if you would like to update the repo")
@@ -51,6 +65,19 @@ if yn == 'update':
                 os.replace(old,new)
             except BaseException as b:
                 print(b)
+# UPDATE THE ODDBALL NOTEBOOKS AS WELL
+# dropzone
+file = 'Daily_Diggs.ipynb'
+old = '/home/brando/algos/Develop/DataBase/' + file
+new = repo_path + '/' + file 
+move_file(old,new)
+# backtest
+file = 'Back_Test_Engine.ipynb'
+old = '/home/brando/algos/Research/ProjectReports/' + file
+new = repo_path + '/' + file 
+move_file(old,new)
+
+path = '/home/brando/algos/Research/ProjectReports/'
 
 say('files moved to template')
 

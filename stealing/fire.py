@@ -19,6 +19,7 @@ import pandas_ta as pta
 import pandas_datareader as pdr
 import time
 from fastquant import backtest
+import stealing.config as config
 ##from finding_fire import jenay, weekly_pull,weekly_push, monthly_pull,monthly_push,one_stop,vally_stop,bipolar,pct_targets,sobar,hl,sola,short_frame,the_twelve
 
 # XXX XXX XXX XXX XXX XXX XXX XXX FINDING FIRE XXX XXX XXX XXX XXX XXX XXX XXX XXXXXXXXXXXXX
@@ -29,6 +30,23 @@ from tqdm import trange
 import talib
 import pandas_ta as pta
 import os 
+
+def drop_scales(df):
+    '''
+    dropz all the plot stuff from jenay
+    
+    '''
+    
+    drop_list = ['ma_10','ma_20','fast_above','200Day_MA','50Day_MA'] 
+    [drop_list.append(col) for col in df.columns if 'scale' in col]
+    for thing in drop_list:
+        if thing in df.columns:
+            try:
+                df = df.drop(thing,axis=1)
+            except Exception as e:
+                print(e)
+                print('nothing to drop')
+            return df
 
 def scale_to_close(df,col):
     new_col = col + '_scaled'
@@ -47,7 +65,7 @@ def hl(df):
     return df
 
 
-def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_capital=False,strat_name='strat_name_here',limit=''):
+def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_capital=False,strat_name='strat_name_here',limit='',fast_quant=True):
     '''
     one stop backtest shop... creates targets compiles the strat, plots the action and TODO: 1.return backtest results 2.name_strat
     TAKES:
@@ -167,8 +185,23 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
         else:
             scale[i] = scale[i-1]
     #plot_capital = True
-    if plot_capital == True:
+    #if plot_capital == True:
+    if plot == True:
+        #jenay(df,line_one='ENTRY_scaled',line_two='SCALE')
         df[['ENTRY_scaled','close','SCALE_ACNT']].iplot(theme='solar',fill=True,title=(strat_name+' Capital Scaled'))
+        #df = scale_to_close(df,'trac')
+        #df = scale_to_close(df,'TARG')
+        #df = scale_to_close(df,'STOP')
+        #df = scale_to_close(df,'OUT')
+#
+        ##df['EXIT_scale'] = df['EXIT'].replace(True,1).replace(1,df.close)
+        #df = scale_to_close(df,'EXIT')
+        #
+        #
+        #line_one='TARG_scale'
+        #line_two='STOP_scale'
+        #scale_one='SCALE_ACNT'
+        #jenay(df,line_one=line_one,line_two=line_two,scale_one=scale_one,title=strat_name)
 
 
 
@@ -207,7 +240,7 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
     print('total_+trades   :',total)
     print('wins            :',win_cnt)
     print('loss            :',los_cnt)
-    print('win_percent     :',(win_pct))
+    print('win_percent     :',(win_pct*100),'%')
     print('final_pnl       :',final_pnl,'%')
 
     d = {}
@@ -230,7 +263,10 @@ def one_stop(df,UP_TARG='up_targ',DN_TARG='dn_targ',BUY='buy',plot=False,plot_ca
         result[['wins','loss']].sum().plot(kind='pie')
 
 
-
+    if fast_quant == True:
+        #PLACE NEW EASYBAKE QUANT HERE:
+        print('INITIATING FAST QUANT')
+        result = easybake_fastquant(df,result)
     return result
 
 
@@ -654,13 +690,13 @@ def numdex(df):
 import plotly.graph_objs as go
 import plotly.offline    as pyo
 
-
-def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,scale_one='',scale_two='',numidex=False):
+from plotly.subplots import make_subplots
+def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,scale_one='',scale_two='',numidex=False,lose_scales=True):
 
     '''
     ploting and scaling all in one
     TAKES:
-        1. df
+ def jenay       1. df
         2. fast and slow ma
         3. line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
         4. line_list : plots a list of column names into line traces 
@@ -697,22 +733,43 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,s
         df[line_two] = df['close'].rolling(200).mean().shift()
 
     #and finally plot the shindig
-    fig = go.Figure(data=[go.Candlestick(x=df.index,#x=df['date'],
+    fig = make_subplots(rows=2, cols=1,row_width=[0.5,1],shared_xaxes=True)
+    fig.add_trace(go.Candlestick(x=df.index,#x=df['date'],
                     open=df['open'],
                     high=df['high'],
                     low=df['low'],
                     close=df['close'],
                     increasing_line_color= 'cyan',
                     decreasing_line_color= 'gray'   
-                                        ),
-                         go.Scatter(x=df.index, y=df[line_one],name=line_one ,line=dict(color='lightgreen', width=3)),
-                         go.Scatter(x=df.index, y=df[line_two],name=line_two ,line=dict(color='red', width=3)),
+                                        ),row=1,col=1)
+                         
                          #go.Scatter(x=df.index, y=df[fname] ,  name=fname,  line=dict(color='purple', width=3)),
                          #go.Scatter(x=df.index, y=df[sname],   name=sname, line=dict(color='yellow', width=3))
 
-                         ])
-    
-#FILL TRACE
+    fig.add_trace(go.Scatter(x=df.index, y=df[line_one],name=line_one ,line=dict(color='lightgreen', width=3)),row=1,col=1)
+    fig.add_trace(go.Scatter(x=df.index, y=df[line_two],name=line_two ,line=dict(color='red', width=3)),row=1,col=1)
+
+    # ATTEMPT TO ADD RSI
+    df['rsi'] = pta.rsi(df.close)
+    df['oversold']   = 30
+    df['overbaught'] = 70
+    df['exoversold']   = 10
+    df['exoverbaught'] = 90
+    #RSI
+    fig.add_trace(
+        go.Scatter(x=df.index, y=df.rsi,name='RSI'),
+        row=2, col=1
+        )
+    #oversold
+    fig.add_trace(
+        go.Scatter(x=df.index, y=df.oversold,name='OverSold',mode='lines'),
+        row=2, col=1
+        )
+    fig.add_trace(
+        go.Scatter(x=df.index, y=df.overbaught,name='OverBought',mode='lines'),
+        row=2, col=1
+        )
+    #FILL TRACE
 
     fig.add_trace(go.Scatter(x=df.index, y=df[line_one],
         mode='lines',
@@ -779,7 +836,8 @@ def jenay(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,s
     
     fig.update_layout(layout,template='plotly_dark',title=title)#template="plotly_dark",title='Candle')
     fig.show(theme='solar',yaxis = dict(fixedrange = False))
-
+    if lose_scales == True:
+        df = drop_scales(df)
     
 
 
@@ -1560,6 +1618,11 @@ def std_targets(df,up_multiple=2,dn_multiple=1):
     df['atr'] =  pta.atr(df.high,df.low,df.close)
     df['up_atr'] = df['close'] + (df.atr * up_multiple)
     df['dn_atr'] = df['close'] - (df.atr * dn_multiple)
+    
+    df['up_targ'] = df['up_atr']
+    df['dn_targ'] = df['dn_atr']
+
+    return df
 '''
 DAILY DIGGS FUNCTIONS >>---->
 '''
@@ -1820,24 +1883,29 @@ def easybake_fastquant(df,result):
         
     '''
     
-    #Convert the "buy" Column into FastQuant Format 
-    df['buy'] = df['buy'].replace(True,1).replace(False,0)
-    # Createing Sell Signal
-    for i in range(1,len(df)-1):
-        if (df['trac'][i] == False) & (df['trac'][i-1] == True):
-            df['buy'][i] = -1
+    from fastquant import backtest
+    #CONVERS ONE_STOP BUY PROTOCAL INTO FASTQUANT
+    df['fq_buy']  = (df['TRAC']==True)  & ( df['TRAC'].shift()==False)
+    df['fq_sell'] = (df['TRAC']==False) & ( df['TRAC'].shift()==True)
+    df['fq_buy'] = df['fq_buy'].replace(True,1).replace(False,0)
+    df['fq_sell'] = df['fq_sell'].replace(True,100).replace(False,0)
+    df['custom'] = df['fq_buy'] + df['fq_sell']
+    #hl(df[['fq_buy','TRAC','fq_sell','custom']])
 
-    #hl(df[['TRAC','trac','buy']])
-    fq_result = backtest(
-                    strategy      = 'ternary',
-                    data          = df,
-                    custom_column = 'buy',
-                    init_cash     = 1000,
-                    plot          = False,
-                    )
+    fq_result = backtest('custom',
+                            df,
+                            plot=False,
+                        init_cash=1000,
+                            )
 
-    result = result.join(fq_result)
-    return result
+    # REMOVE THE DICTIONARY : ( DATABASES DONT LIKE EM )
+    df_dic = fq_result['max'][0]
+    for key in df_dic.keys():
+        fq_result['max_'+key] = df_dic[key]
+    fq_result = fq_result.drop('max',axis=1)
+    print(fq_result.T)
+
+    return result.join(fq_result)
       
 
 def back_burner_buysignal(buy,RSI_THRESH=40):
@@ -2052,7 +2120,7 @@ from urllib.request import urlopen
 import json
 import os
 import pandas as pd
-import config
+import stealing.config
 import pandas_datareader as pdr 
 from Historic_Crypto import HistoricalData
 
@@ -2313,10 +2381,10 @@ import pandas as pd
 import time
 
 ## Credentials and Authorization
-from config import consumer_key
-from config import consumer_secret
-from config import access_token
-from config import access_token_secret
+from stealing.config import consumer_key
+from stealing.config import consumer_secret
+from stealing.config import access_token
+from stealing.config import access_token_secret
 
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -3907,4 +3975,157 @@ def mix_twitter_data_with_price(df,ttdf,tic):
     for row in range(len(df)):
         if df.index[row] > index_mask:
             df['mentioned_before'][row] = True
+    return df
+
+def hilary(df,fast=10,slow=20,title=None,line_one='',line_two='',line_list=None,scale_one='',scale_two='',numidex=False):
+
+    '''
+    ploting and scaling all in one
+    TAKES:
+        1. df
+        2. fast and slow ma
+        3. line_one and line_two : default= 50dayma 200day ma (THEY FILL THEIR GAP )
+        4. line_list : plots a list of column names into line traces 
+        5. scale_one - takes bool and make true close for visual guid on signals
+        6. numindex : turns a time series index into a string index ( while staying in order
+                        and displaying date) . this makes some time series plots easier to read, when 
+                        there are gaps in intraday or weekend data
+
+
+
+    scale_one and scale_two
+    
+    '''
+    if numidex == True:
+        df = numdex(df)
+    
+    
+    # name the avgs
+    fname = 'ma_'+str(fast)
+    sname = 'ma_'+str(slow)
+
+    #create avgs
+    df[fname] = df['close'].rolling(fast).mean().shift()
+    df[sname] = df['close'].rolling(slow).mean().shift()
+    # True if fast is above
+    df['fast_above'] = df[fname]>df[sname]
+
+
+    if len(line_one) == 0:
+        line_one = '50Day_MA'
+        df[line_one] = df['close'].rolling(50).mean().shift()
+    if len(line_two) == 0:
+        line_two = '200Day_MA'
+        df[line_two] = df['close'].rolling(200).mean().shift()
+
+    #and finally plot the shindig
+    fig = go.Figure(data=[go.Candlestick(x=df.index,#x=df['date'],
+                    open=df['open'],
+                    high=df['high'],
+                    low=df['low'],
+                    close=df['close'],
+                    increasing_line_color= 'cyan',
+                    decreasing_line_color= 'gray'   
+                                        ),
+                         go.Scatter(x=df.index, y=df[line_one],name=line_one ,line=dict(color='lightgreen', width=3)),
+                         go.Scatter(x=df.index, y=df[line_two],name=line_two ,line=dict(color='red', width=3)),
+                         #go.Scatter(x=df.index, y=df[fname] ,  name=fname,  line=dict(color='purple', width=3)),
+                         #go.Scatter(x=df.index, y=df[sname],   name=sname, line=dict(color='yellow', width=3))
+
+                         ])
+    
+#FILL TRACE
+
+    fig.add_trace(go.Scatter(x=df.index, y=df[line_one],
+        mode='lines',
+        name=line_one,
+        opacity=0.09,
+        fill='tonexty',
+        line=dict(color='lightgreen')))
+    
+    if len(scale_one) > 0: 
+        
+        ## this is the pandas update issue
+        df = scale_to_close(df,scale_one)
+        scale_name = scale_one + '_scaled'
+
+        fig.add_trace(go.Scatter(x=df.index, y=df[scale_name],
+            mode='lines',
+            name=scale_one,
+            opacity=0.02,
+            fill='tozeroy',
+            line=dict(color='green')))
+
+    
+    if len(scale_two) > 0: 
+        df = scale_to_close(df,scale_two)
+        scale_name_two = scale_two + '_scaled'
+        
+        fig.add_trace(go.Scatter(x=df.index, y=df[scale_name_two],
+            mode='lines',
+            name=scale_two,
+            opacity=0.02,
+            fill='tozeroy',
+            line=dict(color='orange')))
+
+
+    fig.add_trace(go.Scatter(x=df.index, y=df[fname],
+                        mode='lines',
+                        name=fname,
+                            marker=dict(
+                            color='orange',
+                            size=9
+                            )
+                            ))
+
+
+
+    layout = go.Layout(
+        xaxis = dict(
+            rangeslider = dict(
+                visible = False
+            )
+        )
+    )
+    
+    
+    # Add Lines From A List
+    if line_list != None:
+        for line in line_list:
+            
+            fig.add_trace(go.Scatter(x=df.index, y=df[line],
+                mode='lines',
+                name=line,
+                opacity=0.60
+                                    ))
+    
+    fig.update_layout(layout,template='plotly_dark',title=title)#template="plotly_dark",title='Candle')
+    fig.show(theme='solar',yaxis = dict(fixedrange = False))
+
+    
+
+def add_twitter_condition(df,plot=True):
+    '''
+    just makes sure the 'mentioned_before column is ticked off before you buy'
+    '''
+    if plot == True:
+        jenay(df,scale_one='buy',line_one='span_a',line_two='span_b',title='buy before twitter condition')
+    df['buy'] = (df['buy'] == True ) & ( df['mentioned_before']==True )
+    if plot == True:
+        jenay(df,scale_one='buy',line_one='span_a',line_two='span_b',
+              title='buy with twitter condition')
+    return df
+
+def only_buy_cnt(df,buy_cnt_thresh=1,plot=True):
+    '''
+    COUNTS HOW MANY BUY SIGNALS YOU GET . 
+        - cuts em off after the thresh
+    '''
+    col_name       = 'buy_count'
+    df['blank']    = False
+    df             = count_this(df,'buy','blank',col_name)
+    df['b_n_u']    = (df['buy']==True) & (df['buy_count']<=buy_cnt_thresh)
+    if plot == True:
+        jenay(df,scale_one='buy',scale_two='b_n_u')
+    df['buy']      = df['b_n_u']
     return df
