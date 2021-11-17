@@ -1,7 +1,7 @@
-from track_sectors import plot_n_scrape
+from stealing.fire import plot_n_scrape
 import pandas as pd
 import os
-from finding_fire import jenay
+from stealing.fire import jenay,sola
 import sqlalchemy as sql
 import time
 import cufflinks as cf 
@@ -18,7 +18,7 @@ from urllib.request import urlopen
 import json
 import os
 import pandas as pd
-import config
+import stealing.config
 import pandas_datareader as pdr 
 from Historic_Crypto import HistoricalData
 
@@ -191,10 +191,10 @@ import time
 
 ## Credentials and Authorization
 
-from config import consumer_key
-from config import consumer_secret
-from config import access_token
-from config import access_token_secret
+from stealing.config import consumer_key
+from stealing.config import consumer_secret
+from stealing.config import access_token
+from stealing.config import access_token_secret
 
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -216,7 +216,7 @@ tweets = []
 def username_tweets_to_csv(username,count):
     try:      
         # Creation of query method using parameters
-        tweets = tweepy.Cursor(api.user_timeline,id=username).items(count)
+        tweets = tweepy.Cursor(api.user_timeline,user_id=username).items(count)
 
         # Pulling information from tweets iterable object
         tweets_list = [[tweet.created_at, tweet.id, tweet.text] for tweet in tweets]
@@ -435,3 +435,109 @@ def twitter(username,count):
         grid = None
         
     return df,grid
+
+
+def text_query_to_csv(text_query,count):
+
+    '''
+    SCRAPE TWITTER BASED ON TEXT / HASH TAG
+    '''
+
+    #try:
+    # Creation of query method using parameters
+    tweets = tweepy.Cursor(api.search_tweets,q=text_query).items(count)
+
+    # Pulling information from tweets iterable object
+    tweets_list = [[tweet.created_at, tweet.id, tweet.text,tweet.retweet_count,tweet.favorited,tweet.author.followers,tweet.user] for tweet in tweets]
+
+    # Creation of dataframe from tweets list
+    # Add or remove columns as you remove tweet information
+    tweets_df = pd.DataFrame(tweets_list,columns=['Datetime', 'Tweet Id', 'Text','retweet_count','favorited','followers','user'])
+
+    # Converting dataframe to CSV 
+    tweets_df.to_csv('{}-tweets.csv'.format(text_query), sep=',', index = False)
+    return tweets_df
+
+
+def twitter_hashtag(text,count,plot=True):
+    '''
+    returns rates of tweets and retweet rates. 
+    saves an archive of that ino
+    the actual tweet dataframe is saved in the retweet_df column. ( if its not being retweeted its not worth it)
+    returns the info df
+    '''
+    # tweepy function
+    df = text_query_to_csv(text,count)
+
+    # Fix  Index and Run Calculations
+
+    df = df.set_index('Datetime')
+    df.index = df.index - pd.Timedelta(hours=4)
+
+    # aggrigating usefull data to archive for backtest's
+    tweet_retweeted = len(df[df['retweet_count']>0])
+    retweet_df      = df[df['retweet_count']>0]
+    fav_len         = len(df[df['favorited']==True])
+    retweet_sum = retweet_df['retweet_count'].sum()
+    fav_len         = len(df[df['favorited']==True])
+    start_time      = df.index[0]
+    last_time       = df.index[-1]
+    time_delta      = start_time - last_time
+    rate_multiple   = pd.Timedelta(hours=1)/time_delta
+    tweets_per_hour = 400 * rate_multiple
+
+
+    # Save To a Dictionary
+
+    di = {}
+    di['fav_len']        = fav_len
+    di['start_time']     = start_time
+    di['last_time']      = last_time
+    di['time_delta']     = time_delta
+    di['rate_multiple']  = rate_multiple
+    di['tweets_per_hour']= tweets_per_hour
+    di['tweet_retweeted'] = tweet_retweeted
+    di['retweet_df']      = retweet_df
+    di['fav_len']         = fav_len
+    di['retweet_sum']     = retweet_sum
+    # tweet info df
+    tidf = pd.DataFrame([di])
+    tidf['tweets_per_second'] = (tidf['tweets_per_hour']/60)/60
+    tidf
+
+    text
+    
+    # append archive or create it if not exists
+    apath = text+'_tweetArchive.csv'
+    if not os.path.exists(apath):
+        tidf.to_csv(apath,index=False)
+        print('doesnt exist: createing sheet')
+        ndf = tidf.copy()
+    else:
+        oldf = pd.read_csv(apath)
+        ndf  = oldf.append(tidf)
+        ndf.to_csv(apath,index=False)
+        print('it exists: appending it')
+
+
+
+    print('tweets_per_hour:',tweets_per_hour)
+
+    # Data Log
+    ndf
+
+    #making the index the last recorded data
+    ndf = ndf.set_index('last_time')
+    ndf
+
+    # Plots
+
+
+    if plot == True:
+        ###from finding_fire import sola,sobar
+
+        sola(ndf[['rate_multiple','tweet_retweeted']],title='Retweets And RateMultiple')
+
+        sola(ndf['tweets_per_hour'],title='Tweets Per Hour')
+        
+    return ndf

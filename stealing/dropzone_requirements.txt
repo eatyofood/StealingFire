@@ -1,11 +1,12 @@
-pandas
+
+webull
+psycopg2-binary==2.8.6
+pyttsx3
 pretty_errors
-tqdm
-sqlalchemy
 cufflinks
-numpy
-seaborn
 pandas_ta
 pandas_datareader
 fastquant
+historic_crypto
 tweepy==3.8.0
+

@@ -79,7 +79,7 @@ def to_db(df,table_name,db='log',addr= 'postgresql://postgres:password@localhost
 
 
 
-    df.to_sql(table_name,con,if_exists='append')
+    df.to_sql(table_name,con,if_exists='append',method='multi')
     con.close()
     
     print(f'databaselog:{table_name}\n UPDATED!')
@@ -114,7 +114,10 @@ def from_db(table_name,db_name,index_name=None):
         if index_name != None:
             if index_name in a.columns:
                 a = a.set_index(index_name)
-    return a
+        return a
+    else:
+        print('sorry that table is not in table names')
+        return pd.DataFrame([])
 
 
 def parse_nested_dic(d,return_dataframe=True):
@@ -213,3 +216,54 @@ def move_data():
             os.remove(f_path) 
         except:
             print('could not upload:',table_name)
+
+from datetime import datetime
+import os 
+
+def update_version(title=None,version_path=None):
+    if version_path == None:
+        version_path = 'version.py'
+    else:
+        version_path = version_path + '/version.py' 
+
+    
+    if not os.path.exists(version_path):
+        with open(version_path,'w') as f :
+            print('CREATING VERSION>>>1.0.0')
+            f.write('version = 1.0')
+            v = 1.0
+
+
+    else:
+        from version import version
+        v  = version
+        print('PACKAGE VERSION:',v)
+        v = v+0.1
+        print('CURRENT VERSION',v)
+        with open(version_path,'w') as f:
+            f.write('version = '+str(v))
+
+    now    = str(datetime.now()).split('.')[0]
+    version=  ' Version=' + str(v) + now  
+    print(version)
+
+    if title == None:
+        heading= '# ' + input('ENTER A TITLE:')
+    else:
+        heading= '# ' + title 
+        
+    header = heading #+ version
+    print('HEADER: ',header)
+
+    body   = '- '+input('NOTES ABOUT UPDATE   : -')
+
+    payload = header + '\n'  + '## ' + version + '\n' + body + '\n'
+
+    print(payload)
+
+    with open('log.md','a') as f:
+        f.write(payload) 
+
+    os.system('xdg-open log.md')
+    #with open('log.md','a') as f:
+        
