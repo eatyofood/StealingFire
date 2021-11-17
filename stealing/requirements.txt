@@ -1,0 +1,15 @@
+re
+pandas 
+pretty_errors
+shutil 
+tqdm 
+time
+sqlalchemy
+cufflinks 
+numpy
+cufflinks
+seaborn 
+pandas_ta 
+pandas_datareader 
+fastquant 
+talib

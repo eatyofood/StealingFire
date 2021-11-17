@@ -1,0 +1,11 @@
+pandas 
+pretty_errors
+tqdm 
+sqlalchemy
+cufflinks 
+numpy
+cufflinks
+seaborn 
+pandas_ta 
+pandas_datareader 
+fastquant 
